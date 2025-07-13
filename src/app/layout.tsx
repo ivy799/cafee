@@ -20,6 +20,9 @@ import {
 import Link from "next/link"
 import { ThemeProvider } from "@/components/theme-provider"
 import { ModeToggle } from '@/components/ui/mode-toggle'
+import { ShoppingCart } from 'lucide-react';
+import { Button } from '@/components/ui/button'
+
 
 
 const geistSans = Geist({
@@ -102,6 +105,11 @@ export default function RootLayout({
                 </div>
 
                 <div className="flex items-center gap-4">
+                  <Link href="/cart" passHref>
+                    <Button variant="outline" size="icon">
+                      <ShoppingCart />
+                    </Button>
+                  </Link>
                   <ModeToggle />
                   <SignedOut>
                     <SignInButton />

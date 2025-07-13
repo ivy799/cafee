@@ -7,6 +7,7 @@ import { Card, CardContent, CardFooter } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Heart, ShoppingCart } from "lucide-react"
 import { createClient } from '@supabase/supabase-js'
+import { useUser } from '@clerk/nextjs'
 
 interface MenuItem {
 	id: number
@@ -17,7 +18,10 @@ interface MenuItem {
 	price: number
 }
 
-const supabaseUrl = 'https://gxwtlvifqyxflrprxpyq.supabase.co'
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+if (!supabaseUrl) {
+	throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL environment variable')
+}
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 if (!supabaseKey) {
 	throw new Error('Missing NEXT_PUBLIC_SUPABASE_ANON_KEY environment variable')
@@ -28,10 +32,15 @@ export default function MenuPage() {
 	const [menuItems, setMenuItems] = useState<MenuItem[]>([])
 	const [loading, setLoading] = useState(true)
 	const [error, setError] = useState<string | null>(null)
+	const [cartItems, setCartItems] = useState<number[]>([])
+	const { user } = useUser()
 
 	useEffect(() => {
 		fetchMenuItems()
-	}, [])
+		if (user) {
+			fetchCartItems()
+		}
+	}, [user])
 
 	const fetchMenuItems = async () => {
 		try {
@@ -49,6 +58,138 @@ export default function MenuPage() {
 			setError(err instanceof Error ? err.message : 'An error occurred')
 		} finally {
 			setLoading(false)
+		}
+	}
+
+	const fetchCartItems = async () => {
+		if (!user) return
+
+		try {
+			const { data: userData, error: userError } = await supabase
+				.from('users')
+				.select('id')
+				.eq('clerkUserId', user.id)
+				.single()
+
+			if (userError) return
+
+			const { data: cartData, error: cartError } = await supabase
+				.from('cart')
+				.select('id')
+				.eq('userId', userData.id)
+				.single()
+
+			if (cartError) {
+				if (cartError.code === 'PGRST116') {
+					const { data: newCart, error: createCartError } = await supabase
+						.from('cart')
+						.insert([{ userId: userData.id }])
+						.select('id')
+						.single()
+
+					if (createCartError) {
+						console.error('Error creating cart:', createCartError)
+						return
+					}
+					setCartItems([])
+					return
+				}
+				console.error('Error fetching cart:', cartError)
+				return
+			}
+
+			const { data: cartItemsData, error: cartItemsError } = await supabase
+				.from('cartItem')
+				.select('menuId')
+				.eq('cartId', cartData.id)
+
+			if (!cartItemsError && cartItemsData) {
+				setCartItems(cartItemsData.map(item => item.menuId))
+			}
+		} catch (err) {
+			console.error('Error fetching cart items:', err)
+		}
+	}
+
+	const addToCart = async (item: MenuItem) => {
+		if (!user) {
+			alert('Harap login terlebih dahulu.')
+			return
+		}
+
+		try {
+			const { data: userData, error: userError } = await supabase
+				.from('users')
+				.select('id')
+				.eq('clerkUserId', user.id)
+				.single()
+
+			if (userError) {
+				throw new Error(`User not found: ${userError.message}`)
+			}
+
+			let cartId;
+			const { data: cartData, error: cartError } = await supabase
+				.from('cart')
+				.select('id')
+				.eq('userId', userData.id)
+				.single()
+
+			if (cartError) {
+				if (cartError.code === 'PGRST116') {
+					const { data: newCart, error: createCartError } = await supabase
+						.from('cart')
+						.insert([{ userId: userData.id }])
+						.select('id')
+						.single()
+
+					if (createCartError) {
+						throw createCartError
+					}
+					cartId = newCart.id
+				} else {
+					throw cartError
+				}
+			} else {
+				cartId = cartData.id
+			}
+
+			const { data: existingItem, error: existingItemError } = await supabase
+				.from('cartItem')
+				.select('id')
+				.eq('cartId', cartId)
+				.eq('menuId', item.id)
+				.single()
+
+			if (existingItemError && existingItemError.code !== 'PGRST116') {
+				console.error('Fetch error:', existingItemError)
+				return
+			}
+
+			if (existingItem) {
+				alert('Item sudah ada di keranjang')
+				return
+			}
+
+			const { error: insertError } = await supabase
+				.from('cartItem')
+				.insert([
+					{
+						cartId: cartId,
+						menuId: item.id,
+						quantity: 1
+					}
+				])
+
+			if (insertError) {
+				throw insertError
+			}
+
+			setCartItems(prev => [...prev, item.id])
+			alert('Item berhasil ditambahkan ke keranjang')
+		} catch (err) {
+			console.error('Error adding to cart:', err)
+			alert('Gagal menambahkan item ke keranjang')
 		}
 	}
 
@@ -101,10 +242,6 @@ export default function MenuPage() {
 										className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-300"
 										crossOrigin="anonymous"
 									/>
-
-									<button className="absolute top-2 right-2 p-1.5 bg-white/90 dark:bg-black/90 backdrop-blur-sm rounded-full shadow-md hover:shadow-lg transition-all duration-200 hover:scale-110 border border-gray-200 dark:border-gray-600">
-										<Heart className="w-3.5 h-3.5 text-gray-600 dark:text-gray-300 hover:text-red-500 dark:hover:text-red-400" />
-									</button>
 								</div>
 
 								<Badge
@@ -131,11 +268,13 @@ export default function MenuPage() {
 
 							<CardFooter className="px-4 pb-4 pt-0">
 								<Button
-									className="w-full bg-black hover:bg-gray-800 dark:bg-white dark:hover:bg-gray-200 text-white dark:text-black font-medium transition-all duration-200 hover:scale-105 shadow-md hover:shadow-lg h-9"
+									className="w-full bg-black hover:bg-gray-800 dark:bg-white dark:hover:bg-gray-200 text-white dark:text-black font-medium transition-all duration-200 hover:scale-105 shadow-md hover:shadow-lg h-9 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
 									size="sm"
+									disabled={cartItems.includes(product.id)}
+									onClick={() => addToCart(product)}
 								>
 									<ShoppingCart className="w-4 h-4 mr-2" />
-									Add to cart
+									{cartItems.includes(product.id) ? 'In Cart' : 'Add to cart'}
 								</Button>
 							</CardFooter>
 						</Card>
