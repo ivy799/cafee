@@ -18,7 +18,6 @@ export async function POST() {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
-    // Check if user already exists in database
     const existingUser = await prisma.user.findUnique({
       where: { clerkUserId: userId }
     })
@@ -26,11 +25,11 @@ export async function POST() {
     if (existingUser) {
       return NextResponse.json({ 
         message: 'User already exists', 
-        user: existingUser 
+        user: existingUser,
+        alreadyExists: true
       })
     }
 
-    // Create new user in database
     const newUser = await prisma.user.create({
       data: {
         clerkUserId: userId,
@@ -40,7 +39,6 @@ export async function POST() {
       }
     })
 
-    // Create cart for the user
     await prisma.cart.create({
       data: {
         userId: newUser.id

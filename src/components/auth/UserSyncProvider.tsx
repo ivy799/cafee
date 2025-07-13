@@ -5,9 +5,9 @@ import { useUser } from '@clerk/nextjs'
 
 export function UserSyncProvider({ children }: { children: React.ReactNode }) {
   const { isSignedIn } = useUser()
-  const { isSyncing, syncError } = useUserSync()
+  const { isSyncing, syncError, hasSynced, resetSync} = useUserSync()
 
-  if (isSignedIn && isSyncing) {
+  if (isSignedIn && !hasSynced && isSyncing) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
@@ -18,7 +18,7 @@ export function UserSyncProvider({ children }: { children: React.ReactNode }) {
     )
   }
 
-  if (syncError) {
+  if (syncError && !hasSynced) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center text-red-600">

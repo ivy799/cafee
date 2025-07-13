@@ -261,7 +261,7 @@ export default function MenuPage() {
 										</p>
 									)}
 									<p className="text-lg font-bold text-gray-900 dark:text-gray-100">
-										${product.price}
+										Rp. {product.price}
 									</p>
 								</div>
 							</CardContent>
