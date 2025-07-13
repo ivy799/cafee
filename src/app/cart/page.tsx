@@ -3,9 +3,8 @@
 import { useState, useEffect } from 'react'
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardFooter } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Heart, ShoppingCart } from "lucide-react"
+import { Input } from "@/components/ui/input"
+import { ShoppingCart, Minus, Plus, X } from "lucide-react"
 import { createClient } from '@supabase/supabase-js'
 import { useUser } from '@clerk/nextjs'
 
@@ -16,6 +15,7 @@ interface CartItem {
 	description: string | null
 	category: string
 	price: number
+	quantity?: number
 }
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -32,6 +32,8 @@ export default function CartPage() {
 	const [CartItems, setCartItems] = useState<CartItem[]>([])
 	const [loading, setLoading] = useState(true)
 	const [error, setError] = useState<string | null>(null)
+	const [promoCode, setPromoCode] = useState("")
+	const [discount, setDiscount] = useState(0)
 	const { user } = useUser()
 
 	useEffect(() => {
@@ -116,9 +118,71 @@ export default function CartPage() {
 		}
 	}
 
+	const removeItem = async (id: number) => {
+		if (!user?.id) return
+
+		try {
+			const { data: userData, error: userError } = await supabase
+				.from('users')
+				.select('id')
+				.eq('clerkUserId', user.id)
+				.single()
+
+			if (userError || !userData) {
+				throw new Error(`User not found: ${userError ? userError.message : 'User not found in database'}`)
+			}
+
+			const { data: cartData, error: cartError } = await supabase
+				.from('cart')
+				.select('id')
+				.eq('userId', userData.id)
+				.maybeSingle()
+
+			if (cartError) {
+				throw new Error(`Cart not found: ${cartError.message}`)
+			}
+
+			if (!cartData) {
+				throw new Error('Cart not found in database')
+			}
+
+			const { error: deleteError } = await supabase
+				.from('cartItem')
+				.delete()
+				.eq('cartId', cartData.id)
+				.eq('menuId', id)
+
+			if (deleteError) {
+				throw new Error(`Failed to remove item: ${deleteError.message}`)
+			}
+
+			await fetchCartItems()
+		} catch (err) {
+			setError(err instanceof Error ? err.message : 'An error occurred while removing item')
+			return
+		}
+	}
+
+	const updateQuantity = (id: number, newQuantity: number) => {
+		if (newQuantity < 1) return
+		setCartItems((items) => items.map((item) => (item.id === id ? { ...item, quantity: newQuantity } : item)))
+	}
+
+	const applyPromoCode = () => {
+		if (promoCode.toLowerCase() === "save10") {
+			setDiscount(0.1)
+		} else {
+			setDiscount(0)
+		}
+	}
+
+	const subtotal = CartItems.reduce((sum, item) => sum + item.price * (item.quantity || 1), 0)
+	const discountAmount = subtotal * discount
+	const total = subtotal - discountAmount
+
 	if (loading) {
 		return (
-			<div className="min-h-screen bg-white dark:bg-background py-12 px-4 sm:px-6 lg:px-8">
+			<div className="min-h-screen bg-gray-50 dark:bg-background py-12 px-4 sm:px-6 lg:px-8">
 				<div className="max-w-7xl mx-auto text-center">
 					<p className="text-lg text-gray-600 dark:text-gray-300">Loading Cart...</p>
 				</div>
@@ -128,7 +192,7 @@ export default function CartPage() {
 
 	if (error) {
 		return (
-			<div className="min-h-screen bg-white dark:bg-background py-12 px-4 sm:px-6 lg:px-8">
+			<div className="min-h-screen bg-gray-50 dark:bg-background py-12 px-4 sm:px-6 lg:px-8">
 				<div className="max-w-7xl mx-auto text-center">
 					<p className="text-lg text-red-600 dark:text-red-400">Error: {error}</p>
 				</div>
@@ -137,88 +201,185 @@ export default function CartPage() {
 	}
 
 	return (
-		<div className="min-h-screen bg-white dark:bg-background py-12 px-4 sm:px-6 lg:px-8">
+		<div className="min-h-screen bg-gray-50 dark:bg-background py-8 px-4 sm:px-6 lg:px-8">
 			<div className="max-w-7xl mx-auto">
-				<div className="text-center mb-16">
-					<h1 className="text-4xl md:text-5xl font-bold text-black dark:text-white mb-6">
-						Cart
-					</h1>
-					<p className="text-lg text-gray-600 dark:text-gray-300 max-w-3xl mx-auto leading-relaxed">
-						Your cart
-					</p>
-				</div>
-
 				{CartItems.length === 0 ? (
 					<div className="text-center py-16">
 						<ShoppingCart className="w-24 h-24 mx-auto text-gray-300 dark:text-gray-600 mb-6" />
-						<h3 className="text-2xl font-semibold text-gray-600 dark:text-gray-300 mb-4">
-							Your cart is empty
-						</h3>
+						<h3 className="text-2xl font-semibold text-gray-600 dark:text-gray-300 mb-4">Your cart is empty</h3>
 						<p className="text-gray-500 dark:text-gray-400 mb-8 max-w-md mx-auto">
 							Looks like you haven't added any items to your cart yet. Browse our menu to discover delicious options!
 						</p>
 						<Button
 							className="bg-black hover:bg-gray-800 dark:bg-white dark:hover:bg-gray-200 text-white dark:text-black font-medium px-8 py-3"
-							onClick={() => window.location.href = '/menu'}
+							onClick={() => (window.location.href = "/menu")}
 						>
 							Browse Menu
 						</Button>
 					</div>
 				) : (
-					<>
-						<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-							{CartItems.map((product) => (
-								<Card
-									key={product.id}
-									className="group hover:shadow-xl transition-all duration-300 border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 hover:border-gray-300 dark:hover:border-gray-500 flex flex-col"
-								>
-									<CardContent className="p-4 flex-1">
-										<div className="relative mb-3 overflow-hidden rounded-lg bg-gray-50 dark:bg-gray-800">
-											<Image
-												src={product.image || "/placeholder.svg"}
-												alt={product.name}
-												width={300}
-												height={200}
-												className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-300"
-												crossOrigin="anonymous"
-											/>
-										</div>
-
-										<Badge
-											variant="secondary"
-											className="mb-2 bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 border border-gray-200 dark:border-gray-700 uppercase text-xs"
+					<div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+						<div className="lg:col-span-2">
+							<div className="bg-white dark:bg-gray-900 rounded-lg shadow-sm">
+								<div className="p-6 border-b border-gray-200 dark:border-gray-700">
+									<div className="flex items-center justify-between">
+										<h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+											Cart ({CartItems.length} {CartItems.length === 1 ? "product" : "products"})
+										</h1>
+										<Button
+											variant="ghost"
+											size="sm"
+											onClick={() => setCartItems([])}
+											className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-950"
 										>
-											{product.category}
-										</Badge>
+											<X className="w-4 h-4 mr-1" />
+											Clear cart
+										</Button>
+									</div>
+								</div>
 
-										<div className="space-y-1 mb-3">
-											<h3 className="font-semibold text-base text-gray-900 dark:text-gray-100 group-hover:text-gray-700 dark:group-hover:text-gray-300 transition-colors line-clamp-1">
-												{product.name}
-											</h3>
-											{product.description && (
-												<p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2">
-													{product.description}
-												</p>
-											)}
-											<p className="text-lg font-bold text-gray-900 dark:text-gray-100">
-												${product.price}
-											</p>
+								<div className="hidden md:grid md:grid-cols-12 gap-4 p-6 border-b border-gray-200 dark:border-gray-700 text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+									<div className="col-span-6">Product</div>
+									<div className="col-span-2 text-center">Count</div>
+									<div className="col-span-2 text-right">Price</div>
+									<div className="col-span-2"></div>
+								</div>
+
+								<div className="divide-y divide-gray-200 dark:divide-gray-700">
+									{CartItems.map((item) => (
+										<div key={item.id} className="p-6">
+											<div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
+												<div className="md:col-span-6 flex items-center space-x-4">
+													<div className="flex-shrink-0 w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-lg overflow-hidden">
+														<Image
+															src={item.image || "/placeholder.svg"}
+															alt={item.name}
+															width={64}
+															height={64}
+															className="w-full h-full object-cover"
+															crossOrigin="anonymous"
+														/>
+													</div>
+													<div className="flex-1 min-w-0">
+														<h3 className="text-sm font-medium text-gray-900 dark:text-white truncate">{item.name}</h3>
+														<p className="text-sm text-gray-500 dark:text-gray-400 capitalize">{item.category}</p>
+													</div>
+												</div>
+
+												<div className="md:col-span-2 flex items-center justify-center">
+													<div className="flex items-center border border-gray-300 dark:border-gray-600 rounded-lg">
+														<Button
+															variant="ghost"
+															size="sm"
+															onClick={() => updateQuantity(item.id, (item.quantity || 1) - 1)}
+															className="h-8 w-8 p-0 hover:bg-gray-100 dark:hover:bg-gray-800"
+														>
+															<Minus className="w-3 h-3" />
+														</Button>
+														<span className="w-12 text-center text-sm font-medium text-gray-900 dark:text-white">
+															{item.quantity || 1}
+														</span>
+														<Button
+															variant="ghost"
+															size="sm"
+															onClick={() => updateQuantity(item.id, (item.quantity || 1) + 1)}
+															className="h-8 w-8 p-0 hover:bg-gray-100 dark:hover:bg-gray-800"
+														>
+															<Plus className="w-3 h-3" />
+														</Button>
+													</div>
+												</div>
+
+												<div className="md:col-span-2 text-right">
+													<p className="text-sm font-medium text-gray-900 dark:text-white">
+														${(item.price * (item.quantity || 1)).toFixed(2)}
+													</p>
+												</div>
+
+												<div className="md:col-span-2 flex justify-end">
+													<Button
+														variant="ghost"
+														size="sm"
+														onClick={() => removeItem(item.id)}
+														className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-950"
+													>
+														<X className="w-4 h-4" />
+													</Button>
+												</div>
+											</div>
 										</div>
-									</CardContent>
-								</Card>
-							))}
+									))}
+								</div>
+							</div>
 						</div>
 
-						<div className="text-center mt-16">
-							<Button
-								variant="outline"
-								size="lg"
-								className="border-gray-300 dark:border-gray-600 text-black dark:text-white hover:bg-gray-50 dark:hover:bg-gray-800 px-8 py-3 bg-transparent"
-							>
-								Load More Products
-							</Button>
+						<div className="lg:col-span-1">
+							<div className="bg-white dark:bg-gray-900 rounded-lg shadow-sm p-6 sticky top-8">
+								<div className="mb-6">
+									<h3 className="text-lg font-medium text-gray-900 dark:text-white mb-3">Promo code</h3>
+									<div className="flex space-x-2">
+										<Input
+											placeholder="Type here..."
+											value={promoCode}
+											onChange={(e) => setPromoCode(e.target.value)}
+											className="flex-1"
+										/>
+										<Button onClick={applyPromoCode} className="bg-black hover:bg-gray-800 text-white px-6">
+											Apply
+										</Button>
+									</div>
+								</div>
+
+								{/* Order Summary */}
+								<div className="space-y-4 mb-6">
+									<div className="flex justify-between text-sm">
+										<span className="text-gray-600 dark:text-gray-400">Subtotal</span>
+										<span className="text-gray-900 dark:text-white">${subtotal.toFixed(2)}</span>
+									</div>
+									{discount > 0 && (
+										<div className="flex justify-between text-sm">
+											<span className="text-gray-600 dark:text-gray-400">Discount</span>
+											<span className="text-green-600 dark:text-green-400">-${discountAmount.toFixed(2)}</span>
+										</div>
+									)}
+									<div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+										<div className="flex justify-between">
+											<span className="text-lg font-medium text-gray-900 dark:text-white">Total</span>
+											<span className="text-lg font-bold text-gray-900 dark:text-white">${total.toFixed(2)}</span>
+										</div>
+									</div>
+								</div>
+
+								<Button className="w-full bg-black hover:bg-gray-800 text-white py-3">Continue to checkout</Button>
+							</div>
 						</div>
-					</>
+					</div>
+				)}
+
+				{CartItems.length > 0 && (
+					<div className="mt-12">
+						<div className="bg-gradient-to-r from-gray-900 to-gray-700 rounded-2xl p-8 text-white relative overflow-hidden">
+							<div className="relative z-10 flex items-center justify-between">
+								<div>
+									<h3 className="text-2xl font-bold mb-2">Check the newest menu items</h3>
+									<p className="text-gray-300 mb-4">Discover our latest culinary creations</p>
+									<Button
+										variant="outline"
+										className="border-white text-white hover:bg-white hover:text-gray-900 bg-transparent"
+										onClick={() => (window.location.href = "/menu")}
+									>
+										Shop now
+									</Button>
+								</div>
+								<div className="hidden md:block">
+									<div className="w-32 h-32 bg-white/10 rounded-full flex items-center justify-center">
+										<ShoppingCart className="w-16 h-16 text-white" />
+									</div>
+								</div>
+							</div>
+							<div className="absolute inset-0 bg-gradient-to-r from-black/20 to-transparent"></div>
+						</div>
+					</div>
 				)}
 			</div>
 		</div>
