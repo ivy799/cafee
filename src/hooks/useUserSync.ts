@@ -25,8 +25,6 @@ export function useUserSync() {
           throw new Error('Failed to sync user')
         }
 
-        const data = await response.json()
-        console.log('User sync result:', data.message)
       } catch (error) {
         console.error('Error syncing user:', error)
         setSyncError('Failed to sync user data')
