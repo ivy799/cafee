@@ -53,10 +53,24 @@ export default function RootLayout({
             disableTransitionOnChange
           >
             <UserSyncProvider>
-              <header className="flex justify-between items-center p-4 h-16">
+              <header className="fixed top-0 left-0 right-0 z-50 flex justify-between items-center p-4 h-16 bg-white/80 dark:bg-background/80 backdrop-blur-md border-b border-border">
                 <div className="flex items-center">
-                  <div className="text-xl font-bold text-[#6c47ff]">
-                    Cafee
+                  <div className="flex items-center gap-2">
+                    <svg
+                      width="32"
+                      height="32"
+                      viewBox="0 0 32 32"
+                      className="fill-[#6c47ff] dark:fill-[#8b5cf6]"
+                    >
+                      <path d="M6 8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a6 6 0 0 1-6 6H8a6 6 0 0 1-6-6V8z" />
+                      <path d="M22 10h2a4 4 0 0 1 4 4v2a4 4 0 0 1-4 4h-2" className="fill-[#6c47ff]/70 dark:fill-[#8b5cf6]/70" />
+                      <circle cx="10" cy="12" r="1" className="fill-white dark:fill-gray-900" />
+                      <circle cx="14" cy="12" r="1" className="fill-white dark:fill-gray-900" />
+                      <path d="M9 16a3 3 0 0 0 6 0" stroke="white" strokeWidth="1.5" fill="none" className="stroke-white dark:stroke-gray-900" />
+                    </svg>
+                    <div className="text-xl font-bold text-[#6c47ff] dark:text-[#8b5cf6]">
+                      Cafee
+                    </div>
                   </div>
                 </div>
 
@@ -102,7 +116,9 @@ export default function RootLayout({
                   </SignedIn>
                 </div>
               </header>
-              {children}
+              <main className="pt-16">
+                {children}
+              </main>
             </UserSyncProvider>
           </ThemeProvider>
         </body>
