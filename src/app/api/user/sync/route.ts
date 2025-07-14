@@ -9,13 +9,13 @@ export async function POST() {
     const { userId } = await auth()
     
     if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return NextResponse.json({ error: 'Unauthorized', success: false }, { status: 401 })
     }
 
     const user = await currentUser()
     
     if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 })
+      return NextResponse.json({ error: 'User not found', success: false }, { status: 404 })
     }
 
     const existingUser = await prisma.user.findUnique({
@@ -26,7 +26,8 @@ export async function POST() {
       return NextResponse.json({ 
         message: 'User already exists', 
         user: existingUser,
-        alreadyExists: true
+        alreadyExists: true,
+        success: true
       })
     }
 
@@ -47,13 +48,14 @@ export async function POST() {
 
     return NextResponse.json({ 
       message: 'User created successfully', 
-      user: newUser 
+      user: newUser,
+      success: true
     })
 
   } catch (error) {
     console.error('Error syncing user:', error)
     return NextResponse.json(
-      { error: 'Internal server error' }, 
+      { error: 'Internal server error', success: false }, 
       { status: 500 }
     )
   } finally {

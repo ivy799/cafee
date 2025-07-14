@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { ShoppingCart, Minus, Plus, X } from "lucide-react"
 import { createClient } from '@supabase/supabase-js'
 import { useUser } from '@clerk/nextjs'
+import { useRouter } from 'next/navigation'
 
 interface CartItem {
 	id: number
@@ -27,7 +28,6 @@ if (!supabaseKey) {
 	throw new Error('Missing NEXT_PUBLIC_SUPABASE_ANON_KEY environment variable')
 }
 const supabase = createClient(supabaseUrl, supabaseKey)
-
 export default function CartPage() {
 	const [CartItems, setCartItems] = useState<CartItem[]>([])
 	const [loading, setLoading] = useState(true)
@@ -35,6 +35,7 @@ export default function CartPage() {
 	const [promoCode, setPromoCode] = useState("")
 	const [discount, setDiscount] = useState(0)
 	const { user } = useUser()
+	const router = useRouter()
 
 	useEffect(() => {
 		if (user?.id) {
@@ -163,9 +164,51 @@ export default function CartPage() {
 		}
 	}
 
-	const updateQuantity = (id: number, newQuantity: number) => {
+	const updateQuantity = async (id: number, newQuantity: number) => {
 		if (newQuantity < 1) return
+		
 		setCartItems((items) => items.map((item) => (item.id === id ? { ...item, quantity: newQuantity } : item)))
+
+		if (!user?.id) return
+
+		try {
+			const { data: userData, error: userError } = await supabase
+				.from('users')
+				.select('id')
+				.eq('clerkUserId', user.id)
+				.single()
+
+			if (userError || !userData) {
+				console.error('User fetch error:', userError)
+				return
+			}
+
+			const { data: cartData, error: cartError } = await supabase
+				.from('cart')
+				.select('id')
+				.eq('userId', userData.id)
+				.single()
+
+			if (cartError || !cartData) {
+				console.error('Cart fetch error:', cartError)
+				return
+			}
+
+			const { error: updateError } = await supabase
+				.from('cartItem')
+				.update({ quantity: newQuantity })
+				.eq('cartId', cartData.id)
+				.eq('menuId', id)
+
+			if (updateError) {
+				console.error('Error updating quantity:', updateError)
+				await fetchCartItems()
+			}
+
+		} catch (err) {
+			console.error('Error updating quantity:', err)
+			await fetchCartItems()
+		}
 	}
 
 	const applyPromoCode = () => {
@@ -350,7 +393,12 @@ export default function CartPage() {
 									</div>
 								</div>
 
-								<Button className="w-full bg-black hover:bg-gray-800 text-white py-3">Continue to checkout</Button>
+								<Button
+									className="w-full bg-black hover:bg-gray-800 text-white py-3"
+									onClick={() => router.push('/checkout')}
+								>
+									Continue to checkout
+								</Button>
 							</div>
 						</div>
 					</div>
