@@ -5,9 +5,10 @@ import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Heart, ShoppingCart } from "lucide-react"
+import { ShoppingCart } from "lucide-react"
 import { createClient } from '@supabase/supabase-js'
 import { useUser } from '@clerk/nextjs'
+import { AlertDialogDemo } from '@/components/confirmation'
 
 interface MenuItem {
 	id: number
@@ -186,7 +187,6 @@ export default function MenuPage() {
 			}
 
 			setCartItems(prev => [...prev, item.id])
-			alert('Item berhasil ditambahkan ke keranjang')
 		} catch (err) {
 			console.error('Error adding to cart:', err)
 			alert('Gagal menambahkan item ke keranjang')
@@ -267,15 +267,22 @@ export default function MenuPage() {
 							</CardContent>
 
 							<CardFooter className="px-4 pb-4 pt-0">
-								<Button
-									className="w-full bg-black hover:bg-gray-800 dark:bg-white dark:hover:bg-gray-200 text-white dark:text-black font-medium transition-all duration-200 hover:scale-105 shadow-md hover:shadow-lg h-9 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
-									size="sm"
-									disabled={cartItems.includes(product.id)}
-									onClick={() => addToCart(product)}
+								<AlertDialogDemo
+									onConfirm={() => addToCart(product)}
+									title="Add to Cart"
+									message="Are you sure you want to add this item to cart?"
+									actionText="Add item"
+									variant="default"
 								>
-									<ShoppingCart className="w-4 h-4 mr-2" />
-									{cartItems.includes(product.id) ? 'In Cart' : 'Add to cart'}
-								</Button>
+									<Button
+										className="w-full bg-black hover:bg-gray-800 dark:bg-white dark:hover:bg-gray-200 text-white dark:text-black font-medium transition-all duration-200 hover:scale-105 shadow-md hover:shadow-lg h-9 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+										size="sm"
+										disabled={cartItems.includes(product.id)}
+									>
+										<ShoppingCart className="w-4 h-4 mr-2" />
+										{cartItems.includes(product.id) ? 'In Cart' : 'Add to cart'}
+									</Button>
+								</AlertDialogDemo>
 							</CardFooter>
 						</Card>
 					))}

@@ -8,6 +8,7 @@ import { ShoppingCart, Minus, Plus, X } from "lucide-react"
 import { createClient } from '@supabase/supabase-js'
 import { useUser } from '@clerk/nextjs'
 import { useRouter } from 'next/navigation'
+import { AlertDialogDemo } from '@/components/confirmation'
 
 interface CartItem {
 	id: number
@@ -164,9 +165,53 @@ export default function CartPage() {
 		}
 	}
 
+	const removeAllItems = async () => {
+		if (!user?.id) return
+
+		try {
+			const { data: userData, error: userError } = await supabase
+				.from('users')
+				.select('id')
+				.eq('clerkUserId', user.id)
+				.single()
+
+			if (userError || !userData) {
+				throw new Error(`User not found: ${userError ? userError.message : 'User not found in database'}`)
+			}
+
+			const { data: cartData, error: cartError } = await supabase
+				.from('cart')
+				.select('id')
+				.eq('userId', userData.id)
+				.maybeSingle()
+
+			if (cartError) {
+				throw new Error(`Cart not found: ${cartError.message}`)
+			}
+
+			if (!cartData) {
+				throw new Error('Cart not found in database')
+			}
+
+			const { error: deleteError } = await supabase
+				.from('cartItem')
+				.delete()
+				.eq('cartId', cartData.id)
+
+			if (deleteError) {
+				throw new Error(`Failed to remove all items: ${deleteError.message}`)
+			}
+
+			await fetchCartItems()
+		} catch (err) {
+			setError(err instanceof Error ? err.message : 'An error occurred while removing all item')
+			return
+		}
+	}
+
 	const updateQuantity = async (id: number, newQuantity: number) => {
 		if (newQuantity < 1) return
-		
+
 		setCartItems((items) => items.map((item) => (item.id === id ? { ...item, quantity: newQuantity } : item)))
 
 		if (!user?.id) return
@@ -269,15 +314,22 @@ export default function CartPage() {
 										<h1 className="text-2xl font-bold text-gray-900 dark:text-white">
 											Cart ({CartItems.length} {CartItems.length === 1 ? "product" : "products"})
 										</h1>
-										<Button
-											variant="ghost"
-											size="sm"
-											onClick={() => setCartItems([])}
-											className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-950"
+										<AlertDialogDemo
+											onConfirm={() => removeAllItems()}
+											title="Clear all item"
+											message="Are you sure you want to remove all items from your cart? This action cannot be undone."
+											actionText="Clear All"
+											variant="destructive"
 										>
-											<X className="w-4 h-4 mr-1" />
-											Clear cart
-										</Button>
+											<Button
+												variant="ghost"
+												size="sm"
+												className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-950"
+											>
+												<X className="w-4 h-4 mr-1" />
+												Clear cart
+											</Button>
+										</AlertDialogDemo>
 									</div>
 								</div>
 
@@ -340,14 +392,21 @@ export default function CartPage() {
 												</div>
 
 												<div className="md:col-span-2 flex justify-end">
-													<Button
-														variant="ghost"
-														size="sm"
-														onClick={() => removeItem(item.id)}
-														className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-950"
+													<AlertDialogDemo
+														onConfirm={() => removeItem(item.id)}
+														title="Remove Item from Cart"
+														message={`Are you sure you want to remove "${item.name}" from your cart? This action cannot be undone.`}
+														actionText="Remove"
+														variant="destructive"
 													>
-														<X className="w-4 h-4" />
-													</Button>
+														<Button
+															variant="ghost"
+															size="sm"
+															className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-950"
+														>
+															<X className="w-4 h-4" />
+														</Button>
+													</AlertDialogDemo>
 												</div>
 											</div>
 										</div>
@@ -373,7 +432,6 @@ export default function CartPage() {
 									</div>
 								</div>
 
-								{/* Order Summary */}
 								<div className="space-y-4 mb-6">
 									<div className="flex justify-between text-sm">
 										<span className="text-gray-600 dark:text-gray-400">Subtotal</span>
@@ -393,12 +451,20 @@ export default function CartPage() {
 									</div>
 								</div>
 
-								<Button
-									className="w-full bg-black hover:bg-gray-800 text-white py-3"
-									onClick={() => router.push('/checkout')}
+
+								<AlertDialogDemo
+									onConfirm={() => router.push('/checkout')}
+									title="Checkout Cart"
+									message="Are you sure you want to checkout all items from your cart?"
+									actionText="checkout"
+									variant="default"
 								>
-									Continue to checkout
-								</Button>
+									<Button
+										className="w-full bg-black hover:bg-gray-800 text-white py-3"
+									>
+										Continue to checkout
+									</Button>
+								</AlertDialogDemo>
 							</div>
 						</div>
 					</div>
