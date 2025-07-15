@@ -38,21 +38,14 @@ export default function Navbar() {
     return (
       <header className="fixed top-0 left-0 right-0 z-50 flex justify-between items-center p-4 h-16 bg-white/80 dark:bg-background/80 backdrop-blur-md border-b border-border transition-all duration-100">
         <div className="flex items-center">
-          <div className="flex items-center gap-2">
-            <svg width="32" height="32" viewBox="0 0 32 32" className="fill-[#6c47ff] dark:fill-[#8b5cf6]">
-              <path d="M6 8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a6 6 0 0 1-6 6H8a6 6 0 0 1-6-6V8z" />
-              <path d="M22 10h2a4 4 0 0 1 4 4v2a4 4 0 0 1-4 4h-2" className="fill-[#6c47ff]/70 dark:fill-[#8b5cf6]/70" />
-              <circle cx="10" cy="12" r="1" className="fill-white dark:fill-gray-900" />
-              <circle cx="14" cy="12" r="1" className="fill-white dark:fill-gray-900" />
-              <path
-                d="M9 16a3 3 0 0 0 6 0"
-                stroke="white"
-                strokeWidth="1.5"
-                fill="none"
-                className="stroke-white dark:stroke-gray-900"
-              />
-            </svg>
-            <div className="text-xl font-bold text-[#6c47ff] dark:text-[#8b5cf6]">Cafee</div>
+          {/* Enhanced Logo */}
+          <div className="flex items-center space-x-3">
+            <div className="relative w-10 h-10 bg-gradient-to-br from-gray-900 to-gray-700 dark:from-white dark:to-gray-200 rounded-xl flex items-center justify-center shadow-lg">
+              <svg className="w-6 h-6 text-white dark:text-gray-900" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M18.5 3H6c-1.1 0-2 .9-2 2v5.71c0 3.83 2.95 7.18 6.78 7.29 3.96.12 7.22-3.06 7.22-7v-1h.5c1.93 0 3.5-1.57 3.5-3.5S20.43 3 18.5 3zM16 5v3H6V5h10zm2.5 3H18V5h.5c.83 0 1.5.67 1.5 1.5S19.33 8 18.5 8z" />
+              </svg>
+            </div>
+            <span className="text-xl font-bold text-gray-900 dark:text-white">Cafee</span>
           </div>
         </div>
         
@@ -96,21 +89,14 @@ export default function Navbar() {
   return (
     <header className="fixed top-0 left-0 right-0 z-50 flex justify-between items-center p-4 h-16 bg-white/80 dark:bg-background/80 backdrop-blur-md border-b border-border transition-all duration-100">
       <div className="flex items-center">
-        <div className="flex items-center gap-2">
-          <svg width="32" height="32" viewBox="0 0 32 32" className="fill-[#6c47ff] dark:fill-[#8b5cf6]">
-            <path d="M6 8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a6 6 0 0 1-6 6H8a6 6 0 0 1-6-6V8z" />
-            <path d="M22 10h2a4 4 0 0 1 4 4v2a4 4 0 0 1-4 4h-2" className="fill-[#6c47ff]/70 dark:fill-[#8b5cf6]/70" />
-            <circle cx="10" cy="12" r="1" className="fill-white dark:fill-gray-900" />
-            <circle cx="14" cy="12" r="1" className="fill-white dark:fill-gray-900" />
-            <path
-              d="M9 16a3 3 0 0 0 6 0"
-              stroke="white"
-              strokeWidth="1.5"
-              fill="none"
-              className="stroke-white dark:stroke-gray-900"
-            />
-          </svg>
-          <div className="text-xl font-bold text-[#6c47ff] dark:text-[#8b5cf6]">Cafee</div>
+        {/* Enhanced Logo */}
+        <div className="flex items-center space-x-3">
+          <div className="relative w-10 h-10 bg-gradient-to-br from-gray-900 to-gray-700 dark:from-white dark:to-gray-200 rounded-xl flex items-center justify-center shadow-lg">
+            <svg className="w-6 h-6 text-white dark:text-gray-900" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M18.5 3H6c-1.1 0-2 .9-2 2v5.71c0 3.83 2.95 7.18 6.78 7.29 3.96.12 7.22-3.06 7.22-7v-1h.5c1.93 0 3.5-1.57 3.5-3.5S20.43 3 18.5 3zM16 5v3H6V5h10zm2.5 3H18V5h.5c.83 0 1.5.67 1.5 1.5S19.33 8 18.5 8z" />
+            </svg>
+          </div>
+          <span className="text-xl font-bold text-gray-900 dark:text-white">Cafee</span>
         </div>
       </div>
 
