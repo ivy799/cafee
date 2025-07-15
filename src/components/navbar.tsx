@@ -97,7 +97,7 @@ export default function Navbar() {
                     : "hover:bg-accent hover:text-accent-foreground"
                 } transition-all duration-300`}
               >
-                <Link href="/gallery">Gallery</Link>
+                <Link href="/dashboard">dashboard</Link>
               </NavigationMenuLink>
             </NavigationMenuItem>
           </NavigationMenuList>
