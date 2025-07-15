@@ -5,10 +5,13 @@ import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { ShoppingCart } from "lucide-react"
+import { ShoppingCart, Search } from "lucide-react"
 import { createClient } from '@supabase/supabase-js'
 import { useUser } from '@clerk/nextjs'
 import { AlertDialogDemo } from '@/components/confirmation'
+import { Skeleton } from "@/components/ui/skeleton"
+import { Input } from "@/components/ui/input"
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select"
 
 interface MenuItem {
 	id: number
@@ -34,6 +37,10 @@ export default function MenuPage() {
 	const [loading, setLoading] = useState(true)
 	const [error, setError] = useState<string | null>(null)
 	const [cartItems, setCartItems] = useState<number[]>([])
+	const [searchQuery, setSearchQuery] = useState('')
+	const [sortOption, setSortOption] = useState('popular')
+	const [originalMenuItems, setOriginalMenuItems] = useState<MenuItem[]>([])
+
 	const { user } = useUser()
 
 	useEffect(() => {
@@ -42,6 +49,12 @@ export default function MenuPage() {
 			fetchCartItems()
 		}
 	}, [user])
+
+	useEffect(() => {
+		if (originalMenuItems.length > 0) {
+			handleSortMenuItems(sortOption)
+		}
+	}, [sortOption, originalMenuItems.length])
 
 	const fetchMenuItems = async () => {
 		try {
@@ -54,7 +67,9 @@ export default function MenuPage() {
 				throw error
 			}
 
-			setMenuItems(data || [])
+			const fetchedData = data || []
+			setMenuItems(fetchedData)
+			setOriginalMenuItems(fetchedData)
 		} catch (err) {
 			setError(err instanceof Error ? err.message : 'An error occurred')
 		} finally {
@@ -193,11 +208,82 @@ export default function MenuPage() {
 		}
 	}
 
+	const handleSearch = () => {
+		if (searchQuery.trim() === '') {
+			alert('Please enter a search term')
+			return
+		}
+
+		const filteredItems = originalMenuItems.filter(item =>
+			item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+			(item.description && item.description.toLowerCase().includes(searchQuery.toLowerCase()))
+		)
+
+		const sortedResults = applySorting(filteredItems, sortOption)
+		setMenuItems(sortedResults)
+	}
+
+	const handleSortMenuItems = (sortBy: string) => {
+		const sortedItems = applySorting([...originalMenuItems], sortBy)
+		setMenuItems(sortedItems)
+	}
+
+	const applySorting = (items: MenuItem[], sortBy: string): MenuItem[] => {
+		const sortedItems = [...items]
+
+		switch (sortBy) {
+			case 'popular':
+				return sortedItems.sort((a, b) => b.price - a.price)
+			case 'name-asc':
+				return sortedItems.sort((a, b) => a.name.localeCompare(b.name))
+			case 'name-desc':
+				return sortedItems.sort((a, b) => b.name.localeCompare(a.name))
+			case 'price-low':
+				return sortedItems.sort((a, b) => a.price - b.price)
+			case 'price-high':
+				return sortedItems.sort((a, b) => b.price - a.price)
+			case 'category':
+				return sortedItems.sort((a, b) => a.category.localeCompare(b.category))
+			default:
+				return sortedItems
+		}
+	}
+
+	const resetFilters = () => {
+		setSearchQuery('')
+		setSortOption('popular')
+		setMenuItems(originalMenuItems)
+	}
+
 	if (loading) {
 		return (
 			<div className="min-h-screen bg-white dark:bg-background py-12 px-4 sm:px-6 lg:px-8">
-				<div className="max-w-7xl mx-auto text-center">
-					<p className="text-lg text-gray-600 dark:text-gray-300">Loading menu...</p>
+				<div className="max-w-7xl mx-auto">
+					<div className="text-center mb-16">
+						<Skeleton className="h-12 w-96 mx-auto mb-6" />
+						<Skeleton className="h-6 w-full max-w-3xl mx-auto mb-2" />
+						<Skeleton className="h-6 w-80 mx-auto" />
+					</div>
+
+					<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+						{Array.from({ length: 8 }).map((_, index) => (
+							<Card key={index} className="border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 flex flex-col">
+								<CardContent className="p-4 flex-1">
+									<Skeleton className="w-full h-48 rounded-lg mb-3" />
+									<Skeleton className="h-5 w-20 mb-2" />
+									<div className="space-y-1 mb-3">
+										<Skeleton className="h-5 w-full mb-1" />
+										<Skeleton className="h-4 w-full mb-1" />
+										<Skeleton className="h-4 w-3/4 mb-2" />
+										<Skeleton className="h-6 w-24" />
+									</div>
+								</CardContent>
+								<CardFooter className="px-4 pb-4 pt-0">
+									<Skeleton className="h-9 w-full" />
+								</CardFooter>
+							</Card>
+						))}
+					</div>
 				</div>
 			</div>
 		)
@@ -224,6 +310,52 @@ export default function MenuPage() {
 						Our delectable drink options include classic espresso choices, house
 						specialties, fruit smoothies, and frozen treats.
 					</p>
+				</div>
+
+				<div className="flex flex-col sm:flex-row gap-4 mb-8">
+					<div className="flex flex-1 max-w-md gap-2">
+						<div className="relative flex-1">
+							<Input
+								type="text"
+								placeholder="Search for menu"
+								value={searchQuery}
+								onChange={(e) => setSearchQuery(e.target.value)}
+								className="pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+							/>
+							<Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+						</div>
+						<Button
+							onClick={handleSearch}
+							className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-2 rounded-lg transition-colors"
+						>
+							Search
+						</Button>
+					</div>
+
+					<div className="flex items-center gap-2">
+						<span className="text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap">Sort by:</span>
+						<Select value={sortOption} onValueChange={setSortOption}>
+							<SelectTrigger className="w-[140px] border-gray-300 dark:border-gray-600">
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value="popular">Popular</SelectItem>
+								<SelectItem value="name-asc">Name A-Z</SelectItem>
+								<SelectItem value="name-desc">Name Z-A</SelectItem>
+								<SelectItem value="price-low">Price: Low to High</SelectItem>
+								<SelectItem value="price-high">Price: High to Low</SelectItem>
+								<SelectItem value="category">Category</SelectItem>
+							</SelectContent>
+						</Select>
+					</div>
+
+					<Button
+						onClick={resetFilters}
+						variant="outline"
+						className="border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800"
+					>
+						Reset
+					</Button>
 				</div>
 
 				<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
@@ -303,3 +435,4 @@ export default function MenuPage() {
 		</div>
 	)
 }
+
