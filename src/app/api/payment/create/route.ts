@@ -85,7 +85,8 @@ export async function POST(request: NextRequest) {
         finish: `${process.env.NEXT_PUBLIC_BASE_URL}/payment/success?order_id=${transactionId}`,
         error: `${process.env.NEXT_PUBLIC_BASE_URL}/payment/error?order_id=${transactionId}`,
         pending: `${process.env.NEXT_PUBLIC_BASE_URL}/payment/pending?order_id=${transactionId}`
-      }
+      },
+      notification_url: "https://f7fa7a9b89df.ngrok-free.app/api/payment/notification"
     }
 
     const transaction = await snap.createTransaction(parameter)
