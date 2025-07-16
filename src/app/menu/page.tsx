@@ -5,7 +5,7 @@ import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { ShoppingCart, Search, Plus, Minus } from "lucide-react"
+import { ShoppingCart, Search, Plus, Minus, Star } from "lucide-react"
 import { createClient } from '@supabase/supabase-js'
 import { useUser } from '@clerk/nextjs'
 import { AlertDialogDemo } from '@/components/confirmation'
@@ -35,6 +35,18 @@ interface MenuItem {
 	price: number
 }
 
+interface Review {
+	id: number
+	userId: number
+	menuId: number
+	review: string
+	rating: number
+	user?: {
+		name: string | null
+		email: string
+	}
+}
+
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 if (!supabaseUrl) {
 	throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL environment variable')
@@ -48,6 +60,7 @@ const supabase = createClient(supabaseUrl, supabaseKey)
 export default function MenuPage() {
 	const [menuItems, setMenuItems] = useState<MenuItem[]>([])
 	const [loading, setLoading] = useState(true)
+	const [reviewsLoading, setReviewsLoading] = useState(false)
 	const [error, setError] = useState<string | null>(null)
 	const [cartItems, setCartItems] = useState<number[]>([])
 	const [searchQuery, setSearchQuery] = useState('')
@@ -57,6 +70,7 @@ export default function MenuPage() {
 	const [originalMenuItems, setOriginalMenuItems] = useState<MenuItem[]>([])
 	const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null)
 	const [quantity, setQuantity] = useState(1)
+	const [reviews, setReviews] = useState<Review[]>([])
 
 	const { user } = useUser()
 
@@ -74,6 +88,52 @@ export default function MenuPage() {
 			applyFiltersAndSorting()
 		}
 	}, [sortOption, selectedCategory, searchQuery, originalMenuItems.length])
+
+	useEffect(() => {
+		if (selectedItem) {
+			fetchMenuReviews(selectedItem.id)
+		}
+	}, [selectedItem])
+
+	const fetchMenuReviews = async (menuId: number) => {
+		try {
+			setReviewsLoading(true)
+			const { data, error } = await supabase
+				.from('reviews')
+				.select(`
+                    id,
+                    userId,
+                    menuId,
+                    rating,
+                    review,
+                    users!inner(name, email)
+                `)
+				.eq('menuId', menuId)
+				.order('id', { ascending: false })
+
+			if (error) {
+				throw new Error(`Error fetching reviews: ${error.message}`)
+			}
+
+			const reviewsData = data?.map(review => ({
+				id: review.id,
+				userId: review.userId,
+				menuId: review.menuId,
+				rating: review.rating,
+				review: review.review,
+				user: {
+					name: review.users[0]?.name,
+					email: review.users[0]?.email
+				}
+			})) || []
+
+			setReviews(reviewsData)
+		} catch (err) {
+			console.error('Error fetching reviews:', err)
+		} finally {
+			setReviewsLoading(false)
+		}
+	}
 
 	const fetchMenuItems = async () => {
 		try {
@@ -210,7 +270,6 @@ export default function MenuPage() {
 			}
 
 			if (existingItem) {
-				// Update quantity if item already exists
 				const { error: updateError } = await supabase
 					.from('cartItem')
 					.update({ quantity: existingItem.quantity + qty })
@@ -220,7 +279,6 @@ export default function MenuPage() {
 					throw updateError
 				}
 			} else {
-				// Insert new item
 				const { error: insertError } = await supabase
 					.from('cartItem')
 					.insert([
@@ -238,6 +296,7 @@ export default function MenuPage() {
 				setCartItems(prev => [...prev, item.id])
 			}
 
+			alert(`${qty} item(s) added to cart successfully!`)
 		} catch (err) {
 			console.error('Error adding to cart:', err)
 			alert('Gagal menambahkan item ke keranjang')
@@ -305,6 +364,7 @@ export default function MenuPage() {
 	const handleItemClick = (item: MenuItem) => {
 		setSelectedItem(item)
 		setQuantity(1)
+		setReviews([])
 	}
 
 	const incrementQuantity = () => {
@@ -313,6 +373,25 @@ export default function MenuPage() {
 
 	const decrementQuantity = () => {
 		setQuantity(prev => prev > 1 ? prev - 1 : 1)
+	}
+
+	const renderStars = (rating: number) => {
+		return Array.from({ length: 5 }, (_, i) => (
+			<Star
+				key={i}
+				className={`w-4 h-4 ${
+					i < rating
+						? 'fill-yellow-400 text-yellow-400'
+						: 'fill-gray-200 text-gray-200 dark:fill-gray-700 dark:text-gray-700'
+				}`}
+			/>
+		))
+	}
+
+	const calculateAverageRating = () => {
+		if (reviews.length === 0) return 0
+		const sum = reviews.reduce((acc, review) => acc + review.rating, 0)
+		return (sum / reviews.length).toFixed(1)
 	}
 
 	if (loading) {
@@ -545,7 +624,7 @@ export default function MenuPage() {
 
 			{/* Item Detail Sheet */}
 			<Sheet open={!!selectedItem} onOpenChange={(open) => !open && setSelectedItem(null)}>
-				<SheetContent className="sm:max-w-lg w-full overflow-y-auto">
+				<SheetContent className="sm:max-w-2xl w-full overflow-y-auto">
 					{selectedItem && (
 						<div className="flex flex-col h-full">
 							<div className="flex items-start justify-between pb-4 border-b border-gray-200 dark:border-gray-700">
@@ -572,7 +651,7 @@ export default function MenuPage() {
 											alt={selectedItem.name}
 											width={500}
 											height={300}
-											className="w-full h-72 object-cover"
+											className="w-full h-72 object-cover rounded-lg"
 											crossOrigin="anonymous"
 										/>
 									</div>
@@ -624,6 +703,69 @@ export default function MenuPage() {
 											>
 												<Plus className="h-5 w-5" />
 											</Button>
+										</div>
+									</div>
+
+									<Separator className="my-6" />
+
+									{/* Reviews Section */}
+									<div className="space-y-4">
+										<div className="flex items-center justify-between">
+											<Label className="text-sm font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">
+												Customer Reviews
+											</Label>
+											{reviews.length > 0 && (
+												<div className="flex items-center gap-2">
+													<div className="flex items-center gap-1">
+														{renderStars(Number(calculateAverageRating()))}
+													</div>
+													<span className="text-sm font-medium text-gray-600 dark:text-gray-400">
+														{calculateAverageRating()} ({reviews.length} reviews)
+													</span>
+												</div>
+											)}
+										</div>
+
+										<div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4 max-h-60 overflow-y-auto">
+											{reviewsLoading ? (
+												<div className="space-y-3">
+													{Array.from({ length: 3 }).map((_, i) => (
+														<div key={i} className="space-y-2">
+															<div className="flex items-center gap-2">
+																<Skeleton className="h-4 w-20" />
+																<Skeleton className="h-4 w-16" />
+															</div>
+															<Skeleton className="h-12 w-full" />
+														</div>
+													))}
+												</div>
+											) : reviews.length > 0 ? (
+												<div className="space-y-4">
+													{reviews.map((review) => (
+														<div key={review.id} className="bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
+															<div className="flex items-center justify-between mb-2">
+																<div className="flex items-center gap-2">
+																	<span className="font-medium text-sm text-gray-900 dark:text-gray-100">
+																		{review.user?.name || review.user?.email?.split('@')[0] || 'Anonymous'}
+																	</span>
+																	<div className="flex items-center gap-1">
+																		{renderStars(review.rating)}
+																	</div>
+																</div>
+															</div>
+															<p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
+																{review.review}
+															</p>
+														</div>
+													))}
+												</div>
+											) : (
+												<div className="text-center py-8">
+													<p className="text-gray-500 dark:text-gray-400 text-sm">
+														No reviews yet. Be the first to review this item!
+													</p>
+												</div>
+											)}
 										</div>
 									</div>
 
