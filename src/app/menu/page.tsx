@@ -39,6 +39,8 @@ export default function MenuPage() {
 	const [cartItems, setCartItems] = useState<number[]>([])
 	const [searchQuery, setSearchQuery] = useState('')
 	const [sortOption, setSortOption] = useState('popular')
+	const [selectedCategory, setSelectedCategory] = useState('all')
+	const [categories, setCategories] = useState<string[]>([])
 	const [originalMenuItems, setOriginalMenuItems] = useState<MenuItem[]>([])
 
 	const { user } = useUser()
@@ -52,9 +54,11 @@ export default function MenuPage() {
 
 	useEffect(() => {
 		if (originalMenuItems.length > 0) {
-			handleSortMenuItems(sortOption)
+			const uniqueCategories = Array.from(new Set(originalMenuItems.map(item => item.category)))
+			setCategories(uniqueCategories)
+			applyFiltersAndSorting()
 		}
-	}, [sortOption, originalMenuItems.length])
+	}, [sortOption, selectedCategory, searchQuery, originalMenuItems.length])
 
 	const fetchMenuItems = async () => {
 		try {
@@ -87,8 +91,11 @@ export default function MenuPage() {
 				.eq('clerkUserId', user.id)
 				.single()
 
-			if (userError) return
+			if (userError) {
+				throw new Error(`User not found: ${userError.message}`)
+			}
 
+			let cartId;
 			const { data: cartData, error: cartError } = await supabase
 				.from('cart')
 				.select('id')
@@ -104,20 +111,25 @@ export default function MenuPage() {
 						.single()
 
 					if (createCartError) {
-						console.error('Error creating cart:', createCartError)
-						return
+						throw createCartError
 					}
-					setCartItems([])
-					return
+					cartId = newCart.id
+				} else {
+					throw cartError
 				}
-				console.error('Error fetching cart:', cartError)
-				return
+			} else {
+				cartId = cartData.id
 			}
 
+			const cartIdToUse = cartData ? cartData.id : cartId;
+			if (!cartIdToUse) {
+				console.error('No cartId available for fetching cart items.');
+				return;
+			}
 			const { data: cartItemsData, error: cartItemsError } = await supabase
 				.from('cartItem')
 				.select('menuId')
-				.eq('cartId', cartData.id)
+				.eq('cartId', cartIdToUse)
 
 			if (!cartItemsError && cartItemsData) {
 				setCartItems(cartItemsData.map(item => item.menuId))
@@ -208,24 +220,34 @@ export default function MenuPage() {
 		}
 	}
 
-	const handleSearch = () => {
-		if (searchQuery.trim() === '') {
-			alert('Please enter a search term')
-			return
+	const applyFiltersAndSorting = () => {
+		let filteredItems = [...originalMenuItems]
+
+		if (selectedCategory !== 'all') {
+			filteredItems = filteredItems.filter(item => item.category === selectedCategory)
 		}
 
-		const filteredItems = originalMenuItems.filter(item =>
-			item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-			(item.description && item.description.toLowerCase().includes(searchQuery.toLowerCase()))
-		)
+		if (searchQuery.trim() !== '') {
+			filteredItems = filteredItems.filter(item =>
+				item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+				(item.description && item.description.toLowerCase().includes(searchQuery.toLowerCase()))
+			)
+		}
 
-		const sortedResults = applySorting(filteredItems, sortOption)
-		setMenuItems(sortedResults)
+		const sortedItems = applySorting(filteredItems, sortOption)
+		setMenuItems(sortedItems)
+	}
+
+	const handleSearch = () => {
+		applyFiltersAndSorting()
 	}
 
 	const handleSortMenuItems = (sortBy: string) => {
-		const sortedItems = applySorting([...originalMenuItems], sortBy)
-		setMenuItems(sortedItems)
+		setSortOption(sortBy)
+	}
+
+	const handleCategoryChange = (category: string) => {
+		setSelectedCategory(category)
 	}
 
 	const applySorting = (items: MenuItem[], sortBy: string): MenuItem[] => {
@@ -252,6 +274,7 @@ export default function MenuPage() {
 	const resetFilters = () => {
 		setSearchQuery('')
 		setSortOption('popular')
+		setSelectedCategory('all')
 		setMenuItems(originalMenuItems)
 	}
 
@@ -312,112 +335,160 @@ export default function MenuPage() {
 					</p>
 				</div>
 
-				<div className="flex flex-col sm:flex-row gap-4 mb-8">
-					<div className="flex flex-1 max-w-md gap-2">
-						<div className="relative flex-1">
-							<Input
-								type="text"
-								placeholder="Search for menu"
-								value={searchQuery}
-								onChange={(e) => setSearchQuery(e.target.value)}
-								className="pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-							/>
-							<Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+				<div className="flex flex-col gap-4 mb-8">
+					<div className="flex flex-col sm:flex-row gap-4">
+						<div className="flex flex-1 max-w-md gap-2">
+							<div className="relative flex-1">
+								<Input
+									type="text"
+									placeholder="Search for menu"
+									value={searchQuery}
+									onChange={(e) => setSearchQuery(e.target.value)}
+									className="pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+								/>
+								<Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+							</div>
+							<Button
+								onClick={handleSearch}
+								className="bg-black hover:bg-gray-800 text-white dark:bg-white dark:text-black dark:hover:bg-gray-200 px-6 py-2 rounded-lg transition-colors"
+							>
+								Search
+							</Button>
 						</div>
+
 						<Button
-							onClick={handleSearch}
-							className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-2 rounded-lg transition-colors"
+							onClick={resetFilters}
+							variant="outline"
+							className="border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800"
 						>
-							Search
+							Reset
 						</Button>
 					</div>
 
-					<div className="flex items-center gap-2">
-						<span className="text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap">Sort by:</span>
-						<Select value={sortOption} onValueChange={setSortOption}>
-							<SelectTrigger className="w-[140px] border-gray-300 dark:border-gray-600">
-								<SelectValue />
-							</SelectTrigger>
-							<SelectContent>
-								<SelectItem value="popular">Popular</SelectItem>
-								<SelectItem value="name-asc">Name A-Z</SelectItem>
-								<SelectItem value="name-desc">Name Z-A</SelectItem>
-								<SelectItem value="price-low">Price: Low to High</SelectItem>
-								<SelectItem value="price-high">Price: High to Low</SelectItem>
-								<SelectItem value="category">Category</SelectItem>
-							</SelectContent>
-						</Select>
+					<div className="flex flex-col sm:flex-row gap-4">
+						<div className="flex items-center gap-2">
+							<span className="text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap">Category:</span>
+							<Select value={selectedCategory} onValueChange={handleCategoryChange}>
+								<SelectTrigger className="w-[160px] border-gray-300 dark:border-gray-600">
+									<SelectValue />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value="all">All Categories</SelectItem>
+									{categories.map((category) => (
+										<SelectItem key={category} value={category}>
+											{category}
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
+						</div>
+
+						<div className="flex items-center gap-2">
+							<span className="text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap">Sort by:</span>
+							<Select value={sortOption} onValueChange={handleSortMenuItems}>
+								<SelectTrigger className="w-[160px] border-gray-300 dark:border-gray-600">
+									<SelectValue />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value="popular">Popular</SelectItem>
+									<SelectItem value="name-asc">Name A-Z</SelectItem>
+									<SelectItem value="name-desc">Name Z-A</SelectItem>
+									<SelectItem value="price-low">Price: Low to High</SelectItem>
+									<SelectItem value="price-high">Price: High to Low</SelectItem>
+									<SelectItem value="category">Category</SelectItem>
+								</SelectContent>
+							</Select>
+						</div>
 					</div>
 
-					<Button
-						onClick={resetFilters}
-						variant="outline"
-						className="border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800"
-					>
-						Reset
-					</Button>
+					{(selectedCategory !== 'all' || searchQuery.trim() !== '') && (
+						<div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+							<div className="flex flex-wrap items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+								<span>Active filters:</span>
+								{selectedCategory !== 'all' && (
+									<Badge variant="secondary" className="bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200">
+										{selectedCategory}
+									</Badge>
+								)}
+								{searchQuery.trim() !== '' && (
+									<Badge variant="secondary" className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+										"{searchQuery}"
+									</Badge>
+								)}
+								<span className="ml-2">({menuItems.length} items)</span>
+							</div>
+						</div>
+					)}
 				</div>
 
 				<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-					{menuItems.map((product) => (
-						<Card
-							key={product.id}
-							className="group hover:shadow-xl transition-all duration-300 border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 hover:border-gray-300 dark:hover:border-gray-500 flex flex-col"
-						>
-							<CardContent className="p-4 flex-1">
-								<div className="relative mb-3 overflow-hidden rounded-lg bg-gray-50 dark:bg-gray-800">
-									<Image
-										src={product.image || "/placeholder.svg"}
-										alt={product.name}
-										width={300}
-										height={200}
-										className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-300"
-										crossOrigin="anonymous"
-									/>
-								</div>
+					{menuItems.length > 0 ? (
+						menuItems.map((product) => (
+							<Card
+								key={product.id}
+								className="group hover:shadow-xl transition-all duration-300 border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 hover:border-gray-300 dark:hover:border-gray-500 flex flex-col"
+							>
+								<CardContent className="p-4 flex-1">
+									<div className="relative mb-3 overflow-hidden rounded-lg bg-gray-50 dark:bg-gray-800">
+										<Image
+											src={product.image || "/placeholder.svg"}
+											alt={product.name}
+											width={300}
+											height={200}
+											className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-300"
+											crossOrigin="anonymous"
+										/>
+									</div>
 
-								<Badge
-									variant="secondary"
-									className="mb-2 bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 border border-gray-200 dark:border-gray-700 uppercase text-xs"
-								>
-									{product.category}
-								</Badge>
-
-								<div className="space-y-1 mb-3">
-									<h3 className="font-semibold text-base text-gray-900 dark:text-gray-100 group-hover:text-gray-700 dark:group-hover:text-gray-300 transition-colors line-clamp-1">
-										{product.name}
-									</h3>
-									{product.description && (
-										<p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2">
-											{product.description}
-										</p>
-									)}
-									<p className="text-lg font-bold text-gray-900 dark:text-gray-100">
-										Rp. {product.price}
-									</p>
-								</div>
-							</CardContent>
-
-							<CardFooter className="px-4 pb-4 pt-0">
-								<AlertDialogDemo
-									onConfirm={() => addToCart(product)}
-									title="Add to Cart"
-									message="Are you sure you want to add this item to cart?"
-									actionText="Add item"
-									variant="default"
-								>
-									<Button
-										className="w-full bg-black hover:bg-gray-800 dark:bg-white dark:hover:bg-gray-200 text-white dark:text-black font-medium transition-all duration-200 hover:scale-105 shadow-md hover:shadow-lg h-9 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
-										size="sm"
-										disabled={cartItems.includes(product.id)}
+									<Badge
+										variant="secondary"
+										className="mb-2 bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 border border-gray-200 dark:border-gray-700 uppercase text-xs"
 									>
-										<ShoppingCart className="w-4 h-4 mr-2" />
-										{cartItems.includes(product.id) ? 'In Cart' : 'Add to cart'}
-									</Button>
-								</AlertDialogDemo>
-							</CardFooter>
-						</Card>
-					))}
+										{product.category}
+									</Badge>
+
+									<div className="space-y-1 mb-3">
+										<h3 className="font-semibold text-base text-gray-900 dark:text-gray-100 group-hover:text-gray-700 dark:group-hover:text-gray-300 transition-colors line-clamp-1">
+											{product.name}
+										</h3>
+										{product.description && (
+											<p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2">
+												{product.description}
+											</p>
+										)}
+										<p className="text-lg font-bold text-gray-900 dark:text-gray-100">
+											Rp. {product.price}
+										</p>
+									</div>
+								</CardContent>
+
+								<CardFooter className="px-4 pb-4 pt-0">
+									<AlertDialogDemo
+										onConfirm={() => addToCart(product)}
+										title="Add to Cart"
+										message="Are you sure you want to add this item to cart?"
+										actionText="Add item"
+										variant="default"
+									>
+										<Button
+											className="w-full bg-black hover:bg-gray-800 dark:bg-white dark:hover:bg-gray-200 text-white dark:text-black font-medium transition-all duration-200 hover:scale-105 shadow-md hover:shadow-lg h-9 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+											size="sm"
+											disabled={cartItems.includes(product.id)}
+										>
+											<ShoppingCart className="w-4 h-4 mr-2" />
+											{cartItems.includes(product.id) ? 'In Cart' : 'Add to cart'}
+										</Button>
+									</AlertDialogDemo>
+								</CardFooter>
+							</Card>
+						))
+					) : (
+						<div className="col-span-full text-center py-12">
+							<p className="text-lg text-gray-500 dark:text-gray-400">
+								No items found matching your criteria.
+							</p>
+						</div>
+					)}
 				</div>
 
 				{menuItems.length > 0 && (
