@@ -345,6 +345,11 @@ export default function MenuPage() {
 				setCartItems(prev => [...prev, item.id])
 			}
 
+			// Update cart count in navbar after successful addition
+			if (typeof window !== 'undefined' && (window as any).updateCartCount) {
+				(window as any).updateCartCount()
+			}
+
 			toast.success(`${qty} item(s) added to cart successfully!`)
 		} catch (err) {
 			console.error('Error adding to cart:', err)

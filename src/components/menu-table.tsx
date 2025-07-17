@@ -118,6 +118,7 @@ export function MenuTable() {
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({})
   const [rowSelection, setRowSelection] = React.useState({})
+  const [globalFilter, setGlobalFilter] = React.useState("")
   const [pagination, setPagination] = React.useState({
     pageIndex: 0,
     pageSize: 10,
@@ -226,6 +227,23 @@ export function MenuTable() {
     setSelectedMenu(null)
   }
 
+  // Custom global filter function
+  const globalFilterFn = React.useCallback((row: any, columnId: string, filterValue: string) => {
+    const menu = row.original as Menu
+    const searchValue = filterValue.toLowerCase()
+    
+    // Search across multiple fields
+    const searchableFields = [
+      menu.name.toLowerCase(),
+      menu.description?.toLowerCase() || "",
+      menu.category.toLowerCase(),
+      menu.price.toString(),
+      menu.stock.toString()
+    ]
+    
+    return searchableFields.some(field => field.includes(searchValue))
+  }, [])
+
   const columns: ColumnDef<Menu>[] = [
     {
       accessorKey: "menu",
@@ -250,6 +268,16 @@ export function MenuTable() {
             </div>
           </div>
         )
+      },
+      // Custom filter function for searching across name and description
+      filterFn: (row, columnId, filterValue) => {
+        const menu = row.original
+        const searchValue = filterValue.toLowerCase()
+        
+        const name = menu.name.toLowerCase()
+        const description = menu.description?.toLowerCase() || ""
+        
+        return name.includes(searchValue) || description.includes(searchValue)
       },
     },
     {
@@ -396,12 +424,15 @@ export function MenuTable() {
     onColumnVisibilityChange: setColumnVisibility,
     onRowSelectionChange: setRowSelection,
     onPaginationChange: setPagination,
+    onGlobalFilterChange: setGlobalFilter,
+    globalFilterFn: globalFilterFn,
     state: {
       sorting,
       columnFilters,
       columnVisibility,
       rowSelection,
       pagination,
+      globalFilter,
     },
   })
 
@@ -416,6 +447,12 @@ export function MenuTable() {
     const currentCount = menus.filter(menu => menu.category === current).length
     return currentCount > prevCount ? current : prev
   }, categories[0] || "")
+
+  // Clear search function
+  const clearSearch = () => {
+    setGlobalFilter("")
+    setColumnFilters([])
+  }
 
   if (loading) {
     return (
@@ -443,6 +480,8 @@ export function MenuTable() {
       </div>
     )
   }
+
+  const filteredMenus = table.getFilteredRowModel().rows.length
 
   return (
     <div className="space-y-4">
@@ -559,14 +598,22 @@ export function MenuTable() {
               <div className="relative">
                 <IconSearch className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Search menu items..."
-                  value={(table.getColumn("menu")?.getFilterValue() as string) ?? ""}
-                  onChange={(event) =>
-                    table.getColumn("menu")?.setFilterValue(event.target.value)
-                  }
+                  placeholder="Search menu items by name, description, category..."
+                  value={globalFilter}
+                  onChange={(event) => setGlobalFilter(event.target.value)}
                   className="pl-8 max-w-sm"
                 />
               </div>
+              {globalFilter && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={clearSearch}
+                  className="h-8 px-2 lg:px-3"
+                >
+                  Clear
+                </Button>
+              )}
               <Select
                 value={(table.getColumn("category")?.getFilterValue() as string) ?? ""}
                 onValueChange={(value) =>
@@ -628,6 +675,22 @@ export function MenuTable() {
             </div>
           </div>
 
+          {/* Search Results Info */}
+          {globalFilter && (
+            <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+              <div className="flex items-center justify-between text-sm">
+                <div className="text-blue-800 dark:text-blue-200">
+                  <strong>{filteredMenus}</strong> menu item{filteredMenus !== 1 ? 's' : ''} found for "{globalFilter}"
+                </div>
+                {filteredMenus !== totalMenus && (
+                  <div className="text-blue-600 dark:text-blue-400">
+                    ({totalMenus - filteredMenus} hidden)
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           <div className="rounded-md border">
             <Table>
               <TableHeader>
@@ -671,7 +734,16 @@ export function MenuTable() {
                       colSpan={columns.length}
                       className="h-24 text-center"
                     >
-                      No menu items found.
+                      {globalFilter ? (
+                        <div className="flex flex-col items-center gap-2">
+                          <p>No menu items found matching "{globalFilter}"</p>
+                          <Button variant="outline" size="sm" onClick={clearSearch}>
+                            Clear search
+                          </Button>
+                        </div>
+                      ) : (
+                        "No menu items found."
+                      )}
                     </TableCell>
                   </TableRow>
                 )}
@@ -681,7 +753,15 @@ export function MenuTable() {
 
           <div className="flex items-center justify-between space-x-2 py-4">
             <div className="text-sm text-muted-foreground">
-              {menus.length} menu items found in table
+              {globalFilter ? (
+                <span>
+                  Showing {filteredMenus} of {totalMenus} menu item{totalMenus !== 1 ? 's' : ''}
+                </span>
+              ) : (
+                <span>
+                  {totalMenus} menu item{totalMenus !== 1 ? 's' : ''} total
+                </span>
+              )}
             </div>
             <div className="flex items-center space-x-6 lg:space-x-8">
               <div className="flex items-center space-x-2">

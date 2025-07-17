@@ -115,6 +115,16 @@ const columns: ColumnDef<User>[] = [
         </div>
       )
     },
+    // Custom filter function for searching across name and email
+    filterFn: (row, columnId, filterValue) => {
+      const user = row.original
+      const searchValue = filterValue.toLowerCase()
+      
+      const name = user.name?.toLowerCase() || ""
+      const email = user.email.toLowerCase()
+      
+      return name.includes(searchValue) || email.includes(searchValue)
+    },
   },
   {
     accessorKey: "role",
@@ -203,6 +213,7 @@ export function UsersTable() {
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({})
   const [rowSelection, setRowSelection] = React.useState({})
+  const [globalFilter, setGlobalFilter] = React.useState("")
   const [pagination, setPagination] = React.useState({
     pageIndex: 0,
     pageSize: 10,
@@ -256,6 +267,22 @@ export function UsersTable() {
     }
   }
 
+  // Custom global filter function
+  const globalFilterFn = React.useCallback((row: any, columnId: string, filterValue: string) => {
+    const user = row.original as User
+    const searchValue = filterValue.toLowerCase()
+    
+    // Search across multiple fields
+    const searchableFields = [
+      user.name?.toLowerCase() || "",
+      user.email.toLowerCase(),
+      user.role.toLowerCase(),
+      user.clerkUserId.toLowerCase()
+    ]
+    
+    return searchableFields.some(field => field.includes(searchValue))
+  }, [])
+
   const table = useReactTable({
     data: users,
     columns,
@@ -268,12 +295,15 @@ export function UsersTable() {
     onColumnVisibilityChange: setColumnVisibility,
     onRowSelectionChange: setRowSelection,
     onPaginationChange: setPagination,
+    onGlobalFilterChange: setGlobalFilter,
+    globalFilterFn: globalFilterFn,
     state: {
       sorting,
       columnFilters,
       columnVisibility,
       rowSelection,
       pagination,
+      globalFilter,
     },
   })
 
@@ -303,6 +333,11 @@ export function UsersTable() {
   const activeRate = totalUsers > 0 ? (activeUsers / totalUsers * 100) : 0
   const adminRate = totalUsers > 0 ? (adminUsers / totalUsers * 100) : 0
 
+  // Clear search function
+  const clearSearch = () => {
+    setGlobalFilter("")
+  }
+
   if (loading) {
     return (
       <div className="space-y-4">
@@ -329,6 +364,8 @@ export function UsersTable() {
       </div>
     )
   }
+
+  const filteredUsers = table.getFilteredRowModel().rows.length
 
   return (
     <div className="space-y-4">
@@ -418,14 +455,22 @@ export function UsersTable() {
               <div className="relative">
                 <IconSearch className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Search users..."
-                  value={(table.getColumn("user")?.getFilterValue() as string) ?? ""}
-                  onChange={(event) =>
-                    table.getColumn("user")?.setFilterValue(event.target.value)
-                  }
+                  placeholder="Search users"
+                  value={globalFilter}
+                  onChange={(event) => setGlobalFilter(event.target.value)}
                   className="pl-8 max-w-sm"
                 />
               </div>
+              {globalFilter && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={clearSearch}
+                  className="h-8 px-2 lg:px-3"
+                >
+                  Clear
+                </Button>
+              )}
             </div>
             <div className="flex items-center space-x-2">
               <DropdownMenu>
@@ -458,6 +503,22 @@ export function UsersTable() {
               </DropdownMenu>
             </div>
           </div>
+
+          {/* Search Results Info */}
+          {globalFilter && (
+            <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+              <div className="flex items-center justify-between text-sm">
+                <div className="text-blue-800 dark:text-blue-200">
+                  <strong>{filteredUsers}</strong> user{filteredUsers !== 1 ? 's' : ''} found for "{globalFilter}"
+                </div>
+                {filteredUsers !== totalUsers && (
+                  <div className="text-blue-600 dark:text-blue-400">
+                    ({totalUsers - filteredUsers} hidden)
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           <div className="rounded-md border">
             <Table>
@@ -502,7 +563,16 @@ export function UsersTable() {
                       colSpan={columns.length}
                       className="h-24 text-center"
                     >
-                      No users found.
+                      {globalFilter ? (
+                        <div className="flex flex-col items-center gap-2">
+                          <p>No users found matching "{globalFilter}"</p>
+                          <Button variant="outline" size="sm" onClick={clearSearch}>
+                            Clear search
+                          </Button>
+                        </div>
+                      ) : (
+                        "No users found."
+                      )}
                     </TableCell>
                   </TableRow>
                 )}
@@ -512,7 +582,15 @@ export function UsersTable() {
 
           <div className="flex items-center justify-between space-x-2 py-4">
             <div className="text-sm text-muted-foreground">
-              {users.length} user found in table
+              {globalFilter ? (
+                <span>
+                  Showing {filteredUsers} of {totalUsers} user{totalUsers !== 1 ? 's' : ''}
+                </span>
+              ) : (
+                <span>
+                  {totalUsers} user{totalUsers !== 1 ? 's' : ''} total
+                </span>
+              )}
             </div>
             <div className="flex items-center space-x-6 lg:space-x-8">
               <div className="flex items-center space-x-2">
