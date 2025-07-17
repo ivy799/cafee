@@ -27,17 +27,23 @@ import {
   IconTrendingUp,
   IconTrendingDown,
   IconCurrencyDollar,
+  IconEdit,
+  IconTrash,
+  IconDotsVertical,
+  IconLoader2,
 } from "@tabler/icons-react"
 import { createClient } from '@supabase/supabase-js'
+import { toast } from "sonner"
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Checkbox } from "@/components/ui/checkbox"
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
@@ -65,6 +71,17 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { MenuFormDialog } from "@/components/menu-form-dialog"
 
 interface Menu {
   id: number
@@ -94,133 +111,6 @@ if (!supabaseKey) {
 
 const supabase = createClient(supabaseUrl, supabaseKey)
 
-const columns: ColumnDef<Menu>[] = [
-  {
-    accessorKey: "menu",
-    header: "Menu Item",
-    cell: ({ row }) => {
-      const menu = row.original
-      return (
-        <div className="flex items-center space-x-3">
-          <Avatar className="h-12 w-12 rounded-lg">
-            <AvatarImage src={menu.image} alt={menu.name} className="object-cover" />
-            <AvatarFallback className="rounded-lg">
-              {menu.name.charAt(0).toUpperCase()}
-            </AvatarFallback>
-          </Avatar>
-          <div>
-            <div className="font-medium text-gray-900 dark:text-white">
-              {menu.name}
-            </div>
-            <div className="text-sm text-gray-500 dark:text-gray-400 line-clamp-1 max-w-[200px]">
-              {menu.description || "No description"}
-            </div>
-          </div>
-        </div>
-      )
-    },
-  },
-  {
-    accessorKey: "category",
-    header: "Category",
-    cell: ({ row }) => {
-      const category = row.getValue("category") as string
-      const categoryColors = {
-        "appetizer": "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
-        "main": "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
-        "dessert": "bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-200",
-        "beverage": "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200",
-        "side": "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200"
-      }
-      return (
-        <Badge
-          variant="secondary"
-          className={categoryColors[category as keyof typeof categoryColors] || ""}
-        >
-          {category}
-        </Badge>
-      )
-    },
-  },
-  {
-    accessorKey: "price",
-    header: "Price",
-    cell: ({ row }) => {
-      const price = row.getValue("price") as number
-      return (
-        <div className="flex items-center">
-          <IconCurrencyDollar className="w-4 h-4 mr-1 text-green-600" />
-          <span className="font-medium">
-            {new Intl.NumberFormat('id-ID', {
-              style: 'currency',
-              currency: 'IDR',
-              minimumFractionDigits: 0,
-            }).format(price)}
-          </span>
-        </div>
-      )
-    },
-  },
-  {
-    accessorKey: "stock",
-    header: "Stock",
-    cell: ({ row }) => {
-      const stock = row.getValue("stock") as number
-      const isLowStock = stock < 10
-      const isOutOfStock = stock === 0
-      return (
-        <div className="flex items-center">
-          <IconPackage className={`w-4 h-4 mr-1 ${isOutOfStock ? 'text-red-500' : isLowStock ? 'text-yellow-500' : 'text-green-500'}`} />
-          <span className={`font-medium ${isOutOfStock ? 'text-red-600' : isLowStock ? 'text-yellow-600' : 'text-green-600'}`}>
-            {stock}
-          </span>
-          {isLowStock && !isOutOfStock && (
-            <Badge variant="secondary" className="ml-2 bg-yellow-100 text-yellow-800">
-              Low
-            </Badge>
-          )}
-          {isOutOfStock && (
-            <Badge variant="destructive" className="ml-2">
-              Out
-            </Badge>
-          )}
-        </div>
-      )
-    },
-  },
-  {
-    accessorKey: "orders",
-    header: "Orders",
-    cell: ({ row }) => {
-      const count = row.original._count?.orderItems || 0
-      return (
-        <div className="text-center">
-          <span className="font-medium">{count}</span>
-        </div>
-      )
-    },
-  },
-  {
-    accessorKey: "reviews",
-    header: "Reviews",
-    cell: ({ row }) => {
-      const count = row.original._count?.reviews || 0
-      const avgRating = row.original._avg?.rating || 0
-      return (
-        <div className="flex items-center space-x-2">
-          <span className="font-medium">{count}</span>
-          {count > 0 && (
-            <div className="flex items-center">
-              <IconStar className="w-4 h-4 text-yellow-500 fill-current" />
-              <span className="text-sm ml-1">{avgRating.toFixed(1)}</span>
-            </div>
-          )}
-        </div>
-      )
-    },
-  },
-]
-
 export function MenuTable() {
   const [menus, setMenus] = React.useState<Menu[]>([])
   const [loading, setLoading] = React.useState(true)
@@ -232,6 +122,11 @@ export function MenuTable() {
     pageIndex: 0,
     pageSize: 10,
   })
+  
+  const [isFormDialogOpen, setIsFormDialogOpen] = React.useState(false)
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = React.useState(false)
+  const [selectedMenu, setSelectedMenu] = React.useState<Menu | null>(null)
+  const [isDeleting, setIsDeleting] = React.useState(false)
 
   React.useEffect(() => {
     fetchMenus()
@@ -283,10 +178,211 @@ export function MenuTable() {
       setMenus(menusWithCounts)
     } catch (error) {
       console.error('Error fetching menus:', error)
+      toast.error('Failed to fetch menu items')
     } finally {
       setLoading(false)
     }
   }
+
+  const handleDelete = async () => {
+    if (!selectedMenu) return
+
+    setIsDeleting(true)
+    try {
+      const response = await fetch(`/api/menu/${selectedMenu.id}`, {
+        method: 'DELETE',
+      })
+
+      const result = await response.json()
+
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to delete menu item')
+      }
+
+      toast.success('Menu item deleted successfully!')
+      await fetchMenus()
+      setIsDeleteDialogOpen(false)
+      setSelectedMenu(null)
+    } catch (error) {
+      console.error('Error deleting menu:', error)
+      toast.error(error instanceof Error ? error.message : 'Failed to delete menu item')
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
+  const handleEdit = (menu: Menu) => {
+    setSelectedMenu(menu)
+    setIsFormDialogOpen(true)
+  }
+
+  const handleDeleteClick = (menu: Menu) => {
+    setSelectedMenu(menu)
+    setIsDeleteDialogOpen(true)
+  }
+
+  const handleFormSuccess = async () => {
+    await fetchMenus()
+    setSelectedMenu(null)
+  }
+
+  const columns: ColumnDef<Menu>[] = [
+    {
+      accessorKey: "menu",
+      header: "Menu Item",
+      cell: ({ row }) => {
+        const menu = row.original
+        return (
+          <div className="flex items-center space-x-3">
+            <Avatar className="h-12 w-12 rounded-lg">
+              <AvatarImage src={menu.image} alt={menu.name} className="object-cover" />
+              <AvatarFallback className="rounded-lg">
+                {menu.name.charAt(0).toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
+            <div>
+              <div className="font-medium text-gray-900 dark:text-white">
+                {menu.name}
+              </div>
+              <div className="text-sm text-gray-500 dark:text-gray-400 line-clamp-1 max-w-[200px]">
+                {menu.description || "No description"}
+              </div>
+            </div>
+          </div>
+        )
+      },
+    },
+    {
+      accessorKey: "category",
+      header: "Category",
+      cell: ({ row }) => {
+        const category = row.getValue("category") as string
+        const categoryColors = {
+          "appetizer": "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
+          "main": "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
+          "dessert": "bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-200",
+          "beverage": "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200",
+          "side": "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200"
+        }
+        return (
+          <Badge
+            variant="secondary"
+            className={categoryColors[category as keyof typeof categoryColors] || ""}
+          >
+            {category}
+          </Badge>
+        )
+      },
+    },
+    {
+      accessorKey: "price",
+      header: "Price",
+      cell: ({ row }) => {
+        const price = row.getValue("price") as number
+        return (
+          <div className="flex items-center">
+            <IconCurrencyDollar className="w-4 h-4 mr-1 text-green-600" />
+            <span className="font-medium">
+              {new Intl.NumberFormat('id-ID', {
+                style: 'currency',
+                currency: 'IDR',
+                minimumFractionDigits: 0,
+              }).format(price)}
+            </span>
+          </div>
+        )
+      },
+    },
+    {
+      accessorKey: "stock",
+      header: "Stock",
+      cell: ({ row }) => {
+        const stock = row.getValue("stock") as number
+        const isLowStock = stock < 10
+        const isOutOfStock = stock === 0
+        return (
+          <div className="flex items-center">
+            <IconPackage className={`w-4 h-4 mr-1 ${isOutOfStock ? 'text-red-500' : isLowStock ? 'text-yellow-500' : 'text-green-500'}`} />
+            <span className={`font-medium ${isOutOfStock ? 'text-red-600' : isLowStock ? 'text-yellow-600' : 'text-green-600'}`}>
+              {stock}
+            </span>
+            {isLowStock && !isOutOfStock && (
+              <Badge variant="secondary" className="ml-2 bg-yellow-100 text-yellow-800">
+                Low
+              </Badge>
+            )}
+            {isOutOfStock && (
+              <Badge variant="destructive" className="ml-2">
+                Out
+              </Badge>
+            )}
+          </div>
+        )
+      },
+    },
+    {
+      accessorKey: "orders",
+      header: "Orders",
+      cell: ({ row }) => {
+        const count = row.original._count?.orderItems || 0
+        return (
+          <div className="text-center">
+            <span className="font-medium">{count}</span>
+          </div>
+        )
+      },
+    },
+    {
+      accessorKey: "reviews",
+      header: "Reviews",
+      cell: ({ row }) => {
+        const count = row.original._count?.reviews || 0
+        const avgRating = row.original._avg?.rating || 0
+        return (
+          <div className="flex items-center space-x-2">
+            <span className="font-medium">{count}</span>
+            {count > 0 && (
+              <div className="flex items-center">
+                <IconStar className="w-4 h-4 text-yellow-500 fill-current" />
+                <span className="text-sm ml-1">{avgRating.toFixed(1)}</span>
+              </div>
+            )}
+          </div>
+        )
+      },
+    },
+    {
+      id: "actions",
+      header: "Actions",
+      cell: ({ row }) => {
+        const menu = row.original
+        return (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="h-8 w-8 p-0">
+                <span className="sr-only">Open menu</span>
+                <IconDotsVertical className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => handleEdit(menu)}>
+                <IconEdit className="mr-2 h-4 w-4" />
+                Edit
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem 
+                onClick={() => handleDeleteClick(menu)}
+                className="text-red-600"
+              >
+                <IconTrash className="mr-2 h-4 w-4" />
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )
+      },
+    },
+  ]
 
   const table = useReactTable({
     data: menus,
@@ -324,9 +420,9 @@ export function MenuTable() {
   if (loading) {
     return (
       <div className="space-y-4">
-        <div className="*:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card dark:*:data-[slot=card]:bg-card grid grid-cols-1 gap-4 px-4 *:data-[slot=card]:bg-gradient-to-t *:data-[slot=card]:shadow-xs lg:px-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 @lg/main:grid-cols-4">
           {Array.from({ length: 4 }).map((_, i) => (
-            <Card key={i} className="@container/card animate-pulse">
+            <Card key={i} className="animate-pulse">
               <CardHeader>
                 <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-24 mb-2"></div>
                 <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-32"></div>
@@ -350,16 +446,16 @@ export function MenuTable() {
 
   return (
     <div className="space-y-4">
-      <div className="*:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card dark:*:data-[slot=card]:bg-card grid grid-cols-1 gap-4 px-4 *:data-[slot=card]:bg-gradient-to-t *:data-[slot=card]:shadow-xs lg:px-6 @lg/main:grid-cols-4">
-        <Card className="@container/card">
+      <div className="grid grid-cols-1 gap-4 @lg/main:grid-cols-4">
+        <Card>
           <CardHeader>
             <CardDescription>Total Menu Items</CardDescription>
-            <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
+            <CardTitle className="text-2xl font-semibold tabular-nums">
               {totalMenus.toLocaleString()}
             </CardTitle>
             <CardAction>
               <Badge variant="outline">
-                <IconTrendingUp />
+                <IconTrendingUp className="w-4 h-4" />
                 {categories.length} categories
               </Badge>
             </CardAction>
@@ -374,15 +470,15 @@ export function MenuTable() {
           </CardFooter>
         </Card>
         
-        <Card className="@container/card">
+        <Card>
           <CardHeader>
             <CardDescription>Low Stock Items</CardDescription>
-            <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
+            <CardTitle className="text-2xl font-semibold tabular-nums">
               {lowStockItems.toLocaleString()}
             </CardTitle>
             <CardAction>
               <Badge variant="outline" className="bg-yellow-50 text-yellow-700">
-                <IconPackage />
+                <IconPackage className="w-4 h-4" />
                 Warning
               </Badge>
             </CardAction>
@@ -397,15 +493,15 @@ export function MenuTable() {
           </CardFooter>
         </Card>
         
-        <Card className="@container/card">
+        <Card>
           <CardHeader>
             <CardDescription>Out of Stock</CardDescription>
-            <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
+            <CardTitle className="text-2xl font-semibold tabular-nums">
               {outOfStockItems.toLocaleString()}
             </CardTitle>
             <CardAction>
               <Badge variant="destructive">
-                <IconTrendingDown />
+                <IconTrendingDown className="w-4 h-4" />
                 Critical
               </Badge>
             </CardAction>
@@ -420,10 +516,10 @@ export function MenuTable() {
           </CardFooter>
         </Card>
         
-        <Card className="@container/card">
+        <Card>
           <CardHeader>
             <CardDescription>Total Inventory Value</CardDescription>
-            <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
+            <CardTitle className="text-2xl font-semibold tabular-nums">
               {new Intl.NumberFormat('id-ID', {
                 style: 'currency',
                 currency: 'IDR',
@@ -433,7 +529,7 @@ export function MenuTable() {
             </CardTitle>
             <CardAction>
               <Badge variant="outline">
-                <IconCurrencyDollar />
+                <IconCurrencyDollar className="w-4 h-4" />
                 Stock value
               </Badge>
             </CardAction>
@@ -519,7 +615,13 @@ export function MenuTable() {
                     })}
                 </DropdownMenuContent>
               </DropdownMenu>
-              <Button size="sm">
+              <Button 
+                size="sm"
+                onClick={() => {
+                  setSelectedMenu(null)
+                  setIsFormDialogOpen(true)
+                }}
+              >
                 <IconPlus className="mr-2 h-4 w-4" />
                 Add Menu Item
               </Button>
@@ -628,7 +730,8 @@ export function MenuTable() {
                 <Button
                   variant="outline"
                   className="h-8 w-8 p-0"
-                  onClick={() => table.nextPage()}
+                  onClick={() => table.nextPage()
+                  }
                   disabled={!table.getCanNextPage()}
                 >
                   <span className="sr-only">Go to next page</span>
@@ -648,6 +751,44 @@ export function MenuTable() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Form Dialog */}
+      <MenuFormDialog
+        open={isFormDialogOpen}
+        onOpenChange={setIsFormDialogOpen}
+        menu={selectedMenu}
+        onSuccess={handleFormSuccess}
+      />
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the menu item
+              "{selectedMenu?.name}" from the database.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              disabled={isDeleting}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {isDeleting ? (
+                <>
+                  <IconLoader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                "Delete"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

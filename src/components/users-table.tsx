@@ -456,10 +456,6 @@ export function UsersTable() {
                     })}
                 </DropdownMenuContent>
               </DropdownMenu>
-              <Button size="sm">
-                <IconPlus className="mr-2 h-4 w-4" />
-                Add User
-              </Button>
             </div>
           </div>
 

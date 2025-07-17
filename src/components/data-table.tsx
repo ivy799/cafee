@@ -576,10 +576,6 @@ export function DataTable({
                 })}
             </DropdownMenuContent>
           </DropdownMenu>
-          <Button variant="outline" size="sm">
-            <IconPlus />
-            <span className="hidden lg:inline">New Order</span>
-          </Button>
         </div>
       </div>
       <TabsContent
@@ -717,16 +713,37 @@ export function DataTable({
         value="customers"
         className="flex flex-col px-4 lg:px-6"
       >
-        <div className="aspect-video w-full flex-1 rounded-lg border border-dashed"></div>
+        <div className="w-full flex-1 rounded-lg border border-dashed py-8">
+          <div className="rounded-lg border border-dashed p-8 text-center bg-muted">
+            <h2 className="text-lg font-semibold mb-2">Fitur Sedang Dikembangkan</h2>
+            <p className="text-muted-foreground">
+              Tab Customers masih dalam tahap pengembangan. Silakan kembali lagi nanti!
+            </p>
+          </div>
+        </div>
       </TabsContent>
       <TabsContent value="analytics" className="flex flex-col px-4 lg:px-6">
-        <div className="aspect-video w-full flex-1 rounded-lg border border-dashed"></div>
+        <div className="w-full flex-1 rounded-lg border border-dashed py-8">
+          <div className="rounded-lg border border-dashed p-8 text-center bg-muted">
+            <h2 className="text-lg font-semibold mb-2">Fitur Sedang Dikembangkan</h2>
+            <p className="text-muted-foreground">
+              Tab Analytics masih dalam tahap pengembangan. Silakan kembali lagi nanti!
+            </p>
+          </div>
+        </div>
       </TabsContent>
       <TabsContent
         value="reports"
         className="flex flex-col px-4 lg:px-6"
       >
-        <div className="aspect-video w-full flex-1 rounded-lg border border-dashed"></div>
+        <div className="w-full flex-1 rounded-lg border border-dashed py-8">
+          <div className="rounded-lg border border-dashed p-8 text-center bg-muted">
+            <h2 className="text-lg font-semibold mb-2">Fitur Sedang Dikembangkan</h2>
+            <p className="text-muted-foreground">
+              Tab Reports masih dalam tahap pengembangan. Silakan kembali lagi nanti!
+            </p>
+          </div>
+        </div>
       </TabsContent>
     </Tabs>
   )
