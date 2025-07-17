@@ -18,10 +18,7 @@ import {
 	SheetClose,
 	SheetContent,
 	SheetDescription,
-	SheetFooter,
-	SheetHeader,
 	SheetTitle,
-	SheetTrigger,
 } from "@/components/ui/sheet"
 import { Separator } from "@/components/ui/separator"
 
