@@ -5,7 +5,7 @@ import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { ShoppingCart, Search, Plus, Minus, Star } from "lucide-react"
+import { ShoppingCart, Search, Plus, Minus, Star, MessageSquare, X } from "lucide-react"
 import { createClient } from '@supabase/supabase-js'
 import { useUser } from '@clerk/nextjs'
 import { AlertDialogDemo } from '@/components/confirmation'
@@ -20,8 +20,18 @@ import {
 	SheetDescription,
 	SheetTitle,
 } from "@/components/ui/sheet"
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+	DialogTrigger,
+} from "@/components/ui/dialog"
+import { Textarea } from "@/components/ui/textarea"
 import { Separator } from "@/components/ui/separator"
-
+import { toast } from "sonner"
 
 interface MenuItem {
 	id: number
@@ -41,6 +51,7 @@ interface Review {
 	user?: {
 		name: string | null
 		email: string
+		imageUrl?: string | null
 	}
 }
 
@@ -69,12 +80,20 @@ export default function MenuPage() {
 	const [quantity, setQuantity] = useState(1)
 	const [reviews, setReviews] = useState<Review[]>([])
 
+	const [reviewModalOpen, setReviewModalOpen] = useState(false)
+	const [selectedItemForReview, setSelectedItemForReview] = useState<MenuItem | null>(null)
+	const [reviewText, setReviewText] = useState('')
+	const [rating, setRating] = useState(0)
+	const [submittingReview, setSubmittingReview] = useState(false)
+	const [userReviews, setUserReviews] = useState<number[]>([])
+
 	const { user } = useUser()
 
 	useEffect(() => {
 		fetchMenuItems()
 		if (user) {
 			fetchCartItems()
+			fetchUserReviews()
 		}
 	}, [user])
 
@@ -92,6 +111,31 @@ export default function MenuPage() {
 		}
 	}, [selectedItem])
 
+	const fetchUserReviews = async () => {
+		if (!user) return
+
+		try {
+			const { data: userData, error: userError } = await supabase
+				.from('users')
+				.select('id')
+				.eq('clerkUserId', user.id)
+				.single()
+
+			if (userError) return
+
+			const { data: reviewsData, error: reviewsError } = await supabase
+				.from('reviews')
+				.select('menuId')
+				.eq('userId', userData.id)
+
+			if (!reviewsError && reviewsData) {
+				setUserReviews(reviewsData.map(review => review.menuId))
+			}
+		} catch (err) {
+			console.error('Error fetching user reviews:', err)
+		}
+	}
+
 	const fetchMenuReviews = async (menuId: number) => {
 		try {
 			setReviewsLoading(true)
@@ -103,7 +147,11 @@ export default function MenuPage() {
                     menuId,
                     rating,
                     review,
-                    users!inner(name, email)
+                    users (
+                        name,
+                        email,
+                        imageUrl
+                    )
                 `)
 				.eq('menuId', menuId)
 				.order('id', { ascending: false })
@@ -112,6 +160,8 @@ export default function MenuPage() {
 				throw new Error(`Error fetching reviews: ${error.message}`)
 			}
 
+			console.log('Raw reviews data:', data)
+
 			const reviewsData = data?.map(review => ({
 				id: review.id,
 				userId: review.userId,
@@ -119,11 +169,13 @@ export default function MenuPage() {
 				rating: review.rating,
 				review: review.review,
 				user: {
-					name: review.users[0]?.name,
-					email: review.users[0]?.email
+					name: review.users?.name || null,
+					email: review.users?.email || '',
+					imageUrl: review.users?.imageUrl || null
 				}
 			})) || []
 
+			console.log('Processed reviews data:', reviewsData)
 			setReviews(reviewsData)
 		} catch (err) {
 			console.error('Error fetching reviews:', err)
@@ -213,7 +265,7 @@ export default function MenuPage() {
 
 	const addToCart = async (item: MenuItem, qty: number = 1) => {
 		if (!user) {
-			alert('Harap login terlebih dahulu.')
+			toast.error('Harap login terlebih dahulu.')
 			return
 		}
 
@@ -293,10 +345,92 @@ export default function MenuPage() {
 				setCartItems(prev => [...prev, item.id])
 			}
 
-			alert(`${qty} item(s) added to cart successfully!`)
+			toast.success(`${qty} item(s) added to cart successfully!`)
 		} catch (err) {
 			console.error('Error adding to cart:', err)
-			alert('Gagal menambahkan item ke keranjang')
+			toast.error('Gagal menambahkan item ke keranjang')
+		}
+	}
+
+	const handleSheetDebug = (item: MenuItem) => {
+		console.log('Opening sheet for item:', item)
+		setSelectedItem(item)
+		setQuantity(1)
+		console.log('selectedItem after set:', item)
+	}
+
+	const handleReviewClick = (item: MenuItem) => {
+		if (!user) {
+			toast.error('Please login to add a review.')
+			return
+		}
+
+		if (userReviews.includes(item.id)) {
+			console.log('User already reviewed, opening sheet for:', item.name)
+			handleSheetDebug(item)
+		} else {
+			console.log('Opening review modal for:', item.name)
+			setSelectedItemForReview(item)
+			setReviewModalOpen(true)
+			setReviewText('')
+			setRating(0)
+		}
+	}
+
+	const submitReview = async () => {
+		if (!user || !selectedItemForReview) return
+
+		if (rating === 0) {
+			toast.error('Please select a rating')
+			return
+		}
+
+		if (reviewText.trim() === '') {
+			toast.error('Please write a review')
+			return
+		}
+
+		try {
+			setSubmittingReview(true)
+
+			const { data: userData, error: userError } = await supabase
+				.from('users')
+				.select('id')
+				.eq('clerkUserId', user.id)
+				.single()
+
+			if (userError) {
+				throw new Error(`User not found: ${userError.message}`)
+			}
+
+			const { error: reviewError } = await supabase
+				.from('reviews')
+				.insert([
+					{
+						userId: userData.id,
+						menuId: selectedItemForReview.id,
+						review: reviewText.trim(),
+						rating: rating
+					}
+				])
+
+			if (reviewError) {
+				throw reviewError
+			}
+
+			setUserReviews(prev => [...prev, selectedItemForReview.id])
+			setReviewModalOpen(false)
+			setSelectedItemForReview(null)
+			setReviewText('')
+			setRating(0)
+
+			toast.success('Review submitted successfully!')
+
+		} catch (err) {
+			console.error('Error submitting review:', err)
+			toast.error('Failed to submit review')
+		} finally {
+			setSubmittingReview(false)
 		}
 	}
 
@@ -361,7 +495,6 @@ export default function MenuPage() {
 	const handleItemClick = (item: MenuItem) => {
 		setSelectedItem(item)
 		setQuantity(1)
-		setReviews([])
 	}
 
 	const incrementQuantity = () => {
@@ -376,11 +509,23 @@ export default function MenuPage() {
 		return Array.from({ length: 5 }, (_, i) => (
 			<Star
 				key={i}
-				className={`w-4 h-4 ${
-					i < rating
+				className={`w-4 h-4 ${i < rating
 						? 'fill-yellow-400 text-yellow-400'
 						: 'fill-gray-200 text-gray-200 dark:fill-gray-700 dark:text-gray-700'
-				}`}
+					}`}
+			/>
+		))
+	}
+
+	const renderInteractiveStars = (currentRating: number, onRatingChange: (rating: number) => void) => {
+		return Array.from({ length: 5 }, (_, i) => (
+			<Star
+				key={i}
+				className={`w-6 h-6 cursor-pointer transition-colors ${i < currentRating
+						? 'fill-yellow-400 text-yellow-400'
+						: 'fill-gray-200 text-gray-200 dark:fill-gray-700 dark:text-gray-700 hover:fill-yellow-300 hover:text-yellow-300'
+					}`}
+				onClick={() => onRatingChange(i + 1)}
 			/>
 		))
 	}
@@ -415,7 +560,10 @@ export default function MenuPage() {
 									</div>
 								</CardContent>
 								<CardFooter className="px-4 pb-4 pt-0">
-									<Skeleton className="h-9 w-full" />
+									<div className="flex gap-2 w-full">
+										<Skeleton className="h-9 flex-1" />
+										<Skeleton className="h-9 flex-1" />
+									</div>
 								</CardFooter>
 							</Card>
 						))}
@@ -539,11 +687,13 @@ export default function MenuPage() {
 						menuItems.map((product) => (
 							<Card
 								key={product.id}
-								className="group hover:shadow-xl transition-all duration-300 border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 hover:border-gray-300 dark:hover:border-gray-500 flex flex-col cursor-pointer"
-								onClick={() => handleItemClick(product)}
+								className="group hover:shadow-xl transition-all duration-300 border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 hover:border-gray-300 dark:hover:border-gray-500 flex flex-col"
 							>
 								<CardContent className="p-4 flex-1">
-									<div className="relative mb-3 overflow-hidden rounded-lg bg-gray-50 dark:bg-gray-800">
+									<div
+										className="relative mb-3 overflow-hidden rounded-lg bg-gray-50 dark:bg-gray-800 cursor-pointer"
+										onClick={() => handleSheetDebug(product)}
+									>
 										<Image
 											src={product.image || "/placeholder.svg"}
 											alt={product.name}
@@ -562,7 +712,10 @@ export default function MenuPage() {
 									</Badge>
 
 									<div className="space-y-1 mb-3">
-										<h3 className="font-semibold text-base text-gray-900 dark:text-gray-100 group-hover:text-gray-700 dark:group-hover:text-gray-300 transition-colors line-clamp-1">
+										<h3
+											className="font-semibold text-base text-gray-900 dark:text-gray-100 group-hover:text-gray-700 dark:group-hover:text-gray-300 transition-colors line-clamp-1 cursor-pointer"
+											onClick={() => handleSheetDebug(product)}
+										>
 											{product.name}
 										</h3>
 										{product.description && (
@@ -577,23 +730,35 @@ export default function MenuPage() {
 								</CardContent>
 
 								<CardFooter className="px-4 pb-4 pt-0">
-									<AlertDialogDemo
-										onConfirm={() => addToCart(product)}
-										title="Add to Cart"
-										message="Are you sure you want to add this item to cart?"
-										actionText="Add item"
-										variant="default"
-									>
-										<Button
-											className="w-full bg-black hover:bg-gray-800 dark:bg-white dark:hover:bg-gray-200 text-white dark:text-black font-medium transition-all duration-200 hover:scale-105 shadow-md hover:shadow-lg h-9 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
-											size="sm"
-											disabled={cartItems.includes(product.id)}
-											onClick={(e) => e.stopPropagation()}
+									<div className="flex gap-2 w-full">
+										<AlertDialogDemo
+											onConfirm={() => addToCart(product)}
+											title="Add to Cart"
+											message="Are you sure you want to add this item to cart?"
+											actionText="Add item"
+											variant="default"
 										>
-											<ShoppingCart className="w-4 h-4 mr-2" />
-											{cartItems.includes(product.id) ? 'In Cart' : 'Add to cart'}
+											<Button
+												className="flex-1 bg-black hover:bg-gray-800 dark:bg-white dark:hover:bg-gray-200 text-white dark:text-black font-medium transition-all duration-200 hover:scale-105 shadow-md hover:shadow-lg h-9 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+												size="sm"
+												disabled={cartItems.includes(product.id)}
+											>
+												<ShoppingCart className="w-4 h-4 mr-1" />
+												{cartItems.includes(product.id) ? 'In Cart' : 'Add'}
+											</Button>
+										</AlertDialogDemo>
+
+										<Button
+											variant="outline"
+											size="sm"
+											className="flex-1 border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-all duration-200 hover:scale-105 h-9 disabled:opacity-50 disabled:cursor-not-allowed"
+											onClick={() => handleReviewClick(product)}
+											disabled={userReviews.includes(product.id)}
+										>
+											<MessageSquare className="w-4 h-4 mr-1" />
+											{userReviews.includes(product.id) ? 'Reviewed' : 'Review'}
 										</Button>
-									</AlertDialogDemo>
+									</div>
 								</CardFooter>
 							</Card>
 						))
@@ -619,13 +784,66 @@ export default function MenuPage() {
 				)}
 			</div>
 
-			{/* Item Detail Sheet */}
-			<Sheet open={!!selectedItem} onOpenChange={(open) => !open && setSelectedItem(null)}>
+			{/* Review Modal */}
+			<Dialog open={reviewModalOpen} onOpenChange={setReviewModalOpen}>
+				<DialogContent className="sm:max-w-md">
+					<DialogHeader>
+						<DialogTitle>Write a Review</DialogTitle>
+						<DialogDescription>
+							Share your experience with {selectedItemForReview?.name}
+						</DialogDescription>
+					</DialogHeader>
+
+					<div className="space-y-4 py-4">
+						<div className="space-y-2">
+							<Label>Rating</Label>
+							<div className="flex gap-1">
+								{renderInteractiveStars(rating, setRating)}
+							</div>
+						</div>
+
+						<div className="space-y-2">
+							<Label htmlFor="review">Review</Label>
+							<Textarea
+								id="review"
+								placeholder="Tell us about your experience..."
+								value={reviewText}
+								onChange={(e) => setReviewText(e.target.value)}
+								rows={4}
+							/>
+						</div>
+					</div>
+
+					<DialogFooter>
+						<Button
+							variant="outline"
+							onClick={() => setReviewModalOpen(false)}
+							disabled={submittingReview}
+						>
+							Cancel
+						</Button>
+						<Button
+							onClick={submitReview}
+							disabled={submittingReview || rating === 0 || reviewText.trim() === ''}
+						>
+							{submittingReview ? 'Submitting...' : 'Submit Review'}
+						</Button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
+
+			{/* Item Detail Sheet - FIXED VERSION */}
+			<Sheet open={selectedItem !== null} onOpenChange={(open) => {
+				console.log('Sheet onOpenChange called with:', open)
+				if (!open) {
+					setSelectedItem(null)
+				}
+			}}>
 				<SheetContent className="sm:max-w-2xl w-full overflow-y-auto">
-					{selectedItem && (
+					{selectedItem ? (
 						<div className="flex flex-col h-full">
 							<div className="flex items-start justify-between pb-4 border-b border-gray-200 dark:border-gray-700">
-								<div className="flex-1 p-4">
+								<div className="flex-1">
 									<SheetTitle className="text-2xl font-bold text-gray-900 dark:text-gray-100 leading-tight mb-2">
 										{selectedItem.name}
 									</SheetTitle>
@@ -635,12 +853,12 @@ export default function MenuPage() {
 								</div>
 								<SheetClose asChild>
 									<Button variant="ghost" size="icon" className="h-8 w-8 rounded-full">
+										<X className="h-4 w-4" />
 									</Button>
 								</SheetClose>
 							</div>
 
-							{/* Content */}
-							<div className="flex-1 py-6 space-y-6">
+							<div className="flex-1 py-6 space-y-6 overflow-y-auto">
 								<div className="px-4">
 									<div className="relative overflow-hidden rounded-xl bg-gray-50 dark:bg-gray-800 shadow-sm p-4">
 										<Image
@@ -654,7 +872,7 @@ export default function MenuPage() {
 									</div>
 								</div>
 
-								<div className="space-y-6 p-4">
+								<div className="space-y-6 px-4">
 									<div className="flex items-center gap-2">
 										<Badge
 											variant="secondary"
@@ -705,7 +923,6 @@ export default function MenuPage() {
 
 									<Separator className="my-6" />
 
-									{/* Reviews Section */}
 									<div className="space-y-4">
 										<div className="flex items-center justify-between">
 											<Label className="text-sm font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">
@@ -788,7 +1005,7 @@ export default function MenuPage() {
 								</div>
 							</div>
 
-							<div className="border-t border-gray-200 dark:border-gray-700 pt-6 pb-2 p-4">
+							<div className="border-t border-gray-200 dark:border-gray-700 pt-6 pb-2 px-4">
 								<div className="flex gap-3">
 									<SheetClose asChild>
 										<Button
@@ -819,9 +1036,20 @@ export default function MenuPage() {
 								</div>
 							</div>
 						</div>
+					) : (
+						<div className="flex items-center justify-center h-full">
+							<p>Loading...</p>
+						</div>
 					)}
 				</SheetContent>
 			</Sheet>
+
+			{/* Debug Info - Remove this after testing */}
+			{selectedItem && (
+				<div className="fixed bottom-4 right-4 bg-black text-white p-2 rounded text-xs">
+					Selected: {selectedItem.name}
+				</div>
+			)}
 		</div>
 	)
 }
