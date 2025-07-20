@@ -269,7 +269,6 @@ export function MenuTable() {
           </div>
         )
       },
-      // Custom filter function for searching across name and description
       filterFn: (row, columnId, filterValue) => {
         const menu = row.original
         const searchValue = filterValue.toLowerCase()
@@ -448,7 +447,6 @@ export function MenuTable() {
     return currentCount > prevCount ? current : prev
   }, categories[0] || "")
 
-  // Clear search function
   const clearSearch = () => {
     setGlobalFilter("")
     setColumnFilters([])
@@ -584,7 +582,6 @@ export function MenuTable() {
         </Card>
       </div>
 
-      {/* Menu Table */}
       <Card>
         <CardHeader>
           <CardTitle>Menu Management</CardTitle>

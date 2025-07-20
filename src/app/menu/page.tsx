@@ -837,7 +837,6 @@ export default function MenuPage() {
 				</DialogContent>
 			</Dialog>
 
-			{/* Item Detail Sheet - FIXED VERSION */}
 			<Sheet open={selectedItem !== null} onOpenChange={(open) => {
 				console.log('Sheet onOpenChange called with:', open)
 				if (!open) {
@@ -848,7 +847,7 @@ export default function MenuPage() {
 					{selectedItem ? (
 						<div className="flex flex-col h-full">
 							<div className="flex items-start justify-between pb-4 border-b border-gray-200 dark:border-gray-700">
-								<div className="flex-1">
+								<div className="flex-1 p-5">
 									<SheetTitle className="text-2xl font-bold text-gray-900 dark:text-gray-100 leading-tight mb-2">
 										{selectedItem.name}
 									</SheetTitle>
@@ -858,7 +857,6 @@ export default function MenuPage() {
 								</div>
 								<SheetClose asChild>
 									<Button variant="ghost" size="icon" className="h-8 w-8 rounded-full">
-										<X className="h-4 w-4" />
 									</Button>
 								</SheetClose>
 							</div>

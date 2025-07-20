@@ -147,7 +147,7 @@ export async function GET(request: NextRequest) {
     status: 'active',
     message: 'Midtrans notification endpoint is working',
     environment: 'ngrok-development',
-    ngrok_url: 'https://f7fa7a9b89df.ngrok-free.app',
+    ngrok_url: 'https://d64a6ea4f0e8.ngrok-free.app',
     endpoint: '/api/payment/notification',
     timestamp: new Date().toISOString(),
     methods_supported: ['GET', 'POST']
